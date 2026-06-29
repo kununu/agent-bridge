@@ -1,0 +1,13 @@
+# agent-bridge per-project runtime state (Claude sessions + transcripts)
+.agent-bridge/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local diagnostics
+codex-env-probe.txt
+
+# macOS
+.DS_Store
