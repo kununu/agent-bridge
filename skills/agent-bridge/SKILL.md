@@ -1,82 +1,115 @@
 ---
 name: agent-bridge
 description: >-
-  Delegate real coding work to Claude Code as a peer agent, or use Claude as an
-  independent reviewer or adversarial red-team. Trigger when the user says "use
-  agent bridge", "delegate to Claude", "have Claude implement/build/fix this",
-  "get Claude to review/critique", "ask Claude", or otherwise hands a task off to
-  Claude. Claude runs its full harness (read, write, edit, shell, search) in auto
-  mode and streams its reasoning and actions back live. Do NOT trigger for normal
-  work the user wants you (Codex) to do yourself.
+  Delegate real coding work to a peer AI agent (such as Claude Code or Codex) that runs its
+  own full harness, or use that peer as an independent reviewer or adversarial red-team.
+  Trigger when the user says "use agent bridge", "ask <another agent>", "delegate to
+  <agent>", "have <agent> implement/build/fix this", "get <agent> to review/critique",
+  "get a second opinion", or otherwise hands work to a different agent than the one they're
+  talking to. The bridge auto-detects which agent you are and offers the others as peers, so
+  the same instructions work whichever agent you are running inside. Do NOT trigger for
+  normal work the user wants you to do yourself.
 ---
 
-# agent-bridge — delegate to Claude Code
+# agent-bridge — delegate to a peer coding agent
 
-You (Codex) are the lead engineer. **Claude Code** is a strong peer you can hand
-self-contained work to. It runs its own full harness in auto mode, so it can take
-real, meaty work and run it to completion — building, testing, and verifying its
-own output before reporting back.
+You are the lead engineer. Through the bridge you can hand self-contained work to a **peer
+coding agent** — another full agent (e.g. Claude Code or Codex) running its own harness in
+auto mode, so it can take real, meaty work and run it to completion: building, testing, and
+verifying its own output before reporting back.
+
+The bridge **auto-detects which agent you are** and which peers you can call — you never
+delegate to yourself, and the same skill works whichever agent is driving.
+
+## Who can I call?
+
+```
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" agents
+```
+
+Lists the peers available on this machine (everyone except you). Pick one as `<peer>` in the
+commands below. For a specific peer's quirks, read `references/<peer>.md` in this skill.
 
 ## How to delegate
 
 Run this from the **project root** (where you're already working):
 
 ```
-bash "$HOME/.agents/skills/agent-bridge/scripts/ask-claude.sh" "your task for Claude"
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> "your task for the peer"
 ```
 
-- It **streams Claude's reasoning and actions live** — read it as it runs. Claude's
-  final answer comes after the `── claude done ──` marker.
-- It keeps **one Claude session per Codex conversation, automatically** — a new Codex
-  chat starts a fresh Claude session; within this chat, every call continues the same one.
-  So write follow-ups as continuations ("the parser you wrote drops trailing numbers — fix
-  it and rerun the tests"), not as fresh, re-explained tasks. (Keyed on `CODEX_THREAD_ID`,
-  under `./.agent-bridge/threads/<thread>/` — you don't manage any of this.)
-- Each run's full transcript is saved under that thread's `logs/`.
-- If Claude gets confused, or the user asks to start fresh with Claude, reset and retry —
-  see **Starting Claude over** below.
+- It **streams the peer's reasoning and actions live** — read it as it runs. The peer's
+  final answer comes after the `── <peer> done ──` marker.
+- **Thinking takes time.** Before its first action — and between actions — a peer often
+  reasons for one to a few minutes. For some peers you'll see `· thinking… ~Nk tokens`
+  heartbeats with the count climbing; for others, steady `· exec:` / `· tool:` action lines.
+  **That is the peer working, not stalling — do not interrupt, kill, or restart it** while
+  output is flowing. Only step in if the stream goes fully silent for a long stretch.
+- It keeps **one peer session per conversation, per peer, automatically** — a new chat starts
+  a fresh peer session; within this chat, every call to the same peer continues the same one.
+  So write follow-ups as continuations ("the parser you wrote drops trailing numbers — fix it
+  and rerun the tests"), not as fresh, re-explained tasks. (State lives in a global store at
+  `~/.agent-bridge/projects/<project>/<you>/<chat>/<peer>/`; you don't manage any of it.)
+- Each run's full transcript is saved under that peer's `logs/`.
+- If the peer gets confused, or the user asks to start fresh, reset and retry — see
+  **Starting a peer over** below.
 
-## Brief Claude like the capable engineer it is
+## Reasoning effort
 
-- **Hand it substantial chunks, not micro-steps.** A whole feature, a module, a
-  refactor, a real debugging task. Do not break work into tiny one-function asks —
-  that wastes round-trips and badly underuses it. Assume it can own a meaty,
-  well-scoped piece end to end and verify its own work before reporting back.
-- **Give complete context up front:** the goal, the files that matter, constraints,
-  and how to know it succeeded (which tests, expected behavior). The more complete
-  the brief, the bigger the chunk Claude can take.
+The peer runs at a reasoning level — **`high` by default**. To run it harder or lighter, pass
+`--effort`:
+
+```
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --effort <level> "your task"
+```
+
+Levels are `low` · `medium` · `high` · `xhigh` · `max` (low → fast and cheap, max → think as hard
+as possible). **Translate what the user asks into the nearest level** — e.g. *"think hard / be
+thorough"* → `high` or `xhigh`; *"go all out"* → `max`; *"quick / rough / don't overthink it"* →
+`low`. If the user says nothing about effort, omit the flag (you get `high`). You always pass these
+canonical levels; the bridge maps each to the peer's own setting (some peers cap lower — that's
+expected, and shown in the run header).
+
+## Brief the peer like the capable engineer it is
+
+- **Hand it substantial chunks, not micro-steps.** A whole feature, a module, a refactor, a
+  real debugging task. Don't break work into tiny one-function asks — that wastes round-trips
+  and badly underuses it. Assume it can own a meaty, well-scoped piece end to end and verify
+  its own work before reporting back.
+- **Give complete context up front:** the goal, the files that matter, constraints, and how
+  to know it succeeded (which tests, expected behavior). The more complete the brief, the
+  bigger the chunk it can take.
 - **State the scope clearly** so it neither overreaches nor stops short.
 
-## Three ways to use Claude — pick what fits
+## Three ways to use a peer — pick what fits
 
 1. **Implementer** — give it the work; let it build, test, and report.
 2. **Independent reviewer** — fresh eyes on something you or it wrote:
    "Review the changes in X for correctness and edge cases; be specific."
-3. **Adversarial red-team** — have it try to break a design or find the worst
-   failure: "Find inputs where this parser returns the wrong answer."
+3. **Adversarial red-team** — have it try to break a design or find the worst failure:
+   "Find inputs where this parser returns the wrong answer."
 
-For reviews, ask pointed questions and judge the critique on its merits — push back
-when you disagree, take it when it's right. Two strong models disagreeing is the point.
+For reviews, ask pointed questions and judge the critique on its merits — push back when you
+disagree, take it when it's right. Two strong models disagreeing is the point.
 
-## Starting Claude over
+## Starting a peer over
 
-Claude's session persists per project, so by default you continue it. But if Claude gets
-stuck or confused, or the user says anything like *"start a new Claude session and try
-again"*, **run the reset yourself and then re-issue the task** — the user should not have
-to type any command:
+A peer's session persists per conversation, so by default you continue it. But if it gets
+stuck or confused, or the user says anything like *"start a new session and try again"*,
+**run the reset yourself and then re-issue the task** — the user shouldn't have to type any
+command:
 
 ```
-bash "$HOME/.agents/skills/agent-bridge/scripts/ask-claude.sh" reset
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> reset   # just this peer
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" reset          # every peer, this chat
 ```
 
-That clears **this Codex conversation's** Claude session; your next call starts Claude from
-a clean slate. Other conversations' sessions are untouched.
+Your next call starts that peer from a clean slate. Other conversations are untouched.
 
 ## Your part of the loop
 
-- After Claude reports, **verify independently** with your own tools (read the files,
-  run the tests) before accepting. Don't rubber-stamp.
-- If something's off, delegate the fix in the **same session**, or fix it yourself —
-  your call.
-- When it's done and verified, give the human a short summary: what was built, what
-  you checked, and anything still open.
+- After the peer reports, **verify independently** with your own tools (read the files, run
+  the tests) before accepting. Don't rubber-stamp.
+- If something's off, delegate the fix in the **same session**, or fix it yourself — your call.
+- When it's done and verified, give the human a short summary: what was built, what you
+  checked, and anything still open.

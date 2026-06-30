@@ -1,0 +1,23 @@
+{
+  "bin": "codex",
+  "stream_format": "codex-jsonl",
+  "sid_key": "thread_id",
+  "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh" },
+  "cmd_new": [
+    "exec",
+    "-c", "model_reasoning_effort={effort}",
+    "--json",
+    "--sandbox", "danger-full-access",
+    "--skip-git-repo-check",
+    "{prompt}"
+  ],
+  "cmd_resume": [
+    "exec",
+    "-c", "model_reasoning_effort={effort}",
+    "--json",
+    "--sandbox", "danger-full-access",
+    "--skip-git-repo-check",
+    "resume", "{sid}",
+    "{prompt}"
+  ]
+}

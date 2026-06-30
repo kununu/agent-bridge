@@ -1,0 +1,21 @@
+{
+  "bin": "claude",
+  "stream_format": "claude-stream-json",
+  "sid_key": "session_id",
+  "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max" },
+  "cmd_new": [
+    "-p", "{prompt}",
+    "--dangerously-skip-permissions",
+    "--output-format", "stream-json",
+    "--verbose",
+    "--effort", "{effort}"
+  ],
+  "cmd_resume": [
+    "-p", "{prompt}",
+    "--resume", "{sid}",
+    "--dangerously-skip-permissions",
+    "--output-format", "stream-json",
+    "--verbose",
+    "--effort", "{effort}"
+  ]
+}

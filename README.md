@@ -1,51 +1,47 @@
 # agent-bridge
 
-Have **Codex drive Claude Code** — as implementer, reviewer, or red-team — without
-copy-pasting between two chat windows. Both run on your own subscriptions via their real
-CLIs (so each keeps its full toolset), and Claude's reasoning streams back live while
-Codex watches.
+Have **any AI coding agent drive another as a peer** — to implement, review, or red-team — without copy-pasting between two chat windows.
 
-It's packaged as a **Codex skill**: you talk to Codex, and when you say *"use agent bridge
-to …"* it briefs Claude, runs it, reads the streamed result, verifies, and reports back.
+Talk to whichever agent you prefer (Claude Code, Codex, …). When you say *"ask Codex to implement this"* or *"have Claude review this diff"*, the bridge briefs the peer, runs it on your own subscription via the peer's **real CLI** (so it keeps its full toolset), streams the work back live, then verifies it and reports. You watch and steer between rounds — you're never the messenger.
+
+It's **one [agent-skill](https://agentskills.io)** installed into every agent you use. The skill is generic: it auto-detects which agent it's running inside and offers the others as peers — so the *same* skill makes the bridge a two-way (and N-way) street.
+
+## Requirements
+
+- **The peer's CLI**, installed and logged in (e.g. `claude`, `codex`) — the bridge runs the agent you delegate *to* through its real CLI. The agent you *drive* needs no CLI of its own; it can be any app that loads the skill (a terminal CLI **or** a desktop/IDE app).
+- **`python3`** on PATH — the bridge's scripts use it.
+- **Node / `npx`** — only to install the skill (below).
+
+**Available agents** live in [`skills/agent-bridge/scripts/adapters/`](skills/agent-bridge/scripts/adapters) — one JSON per supported peer; that directory *is* the current list.
+
+## Install
+
+With the [`skills`](https://skills.sh) CLI, install the skill into each agent you want bridged:
+
+```
+npx skills add kununu/agent-bridge -a claude-code,codex -g # -g installs into all projects;
+```
+
+To update later, run `npx skills update agent-bridge`.
 
 ## Structure
 
 ```
 skills/agent-bridge/
-├── SKILL.md              # when to delegate + how to brief Claude (Codex reads this)
+├── SKILL.md          # when to delegate + how to brief a peer (the host agent reads this)
+├── references/       # per-peer notes, loaded on demand when you target that peer
+│   ├── claude.md
+│   └── codex.md
 └── scripts/
-    ├── ask-claude.sh     # runs `claude -p`, streams live, 1 session per Codex thread
-    └── render.py         # makes Claude's JSON stream readable
-sandbox/                  # throwaway task to try the loop end-to-end
+    ├── bridge.sh     # dispatcher: detect who you are → resolve the peer → run it → stream → persist the session
+    ├── render.py     # normalize each peer's native stream (Claude stream-json, Codex JSONL, …) → one readable view
+    ├── adapter.py    # read a peer adapter → build its argv
+    ├── meta.py       # write a self-describing meta.json per chat in the session store
+    └── adapters/     # one small JSON per peer — adding an agent = dropping a file here
+        ├── claude.json
+        └── codex.json
 ```
 
-`ask-claude.sh` keeps **one Claude session per Codex conversation** — keyed on
-`CODEX_THREAD_ID` under `./.agent-bridge/threads/` — so a new Codex chat automatically gets
-a fresh Claude session, while follow-ups in the same chat continue it.
+**The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file, not a code change** — that's what keeps an N×N problem linear.
 
-## Install
-
-For Codex, globally, with the [`skills`](https://skills.sh) CLI (assumes the repo is on GitHub):
-
-```
-npx skills add <owner>/agent-bridge -a codex -g     # -a codex: Codex only · -g: all projects
-```
-
-Re-run to update. Requires `claude` (logged in) and `python3` on PATH; in the Codex app,
-open the project in local mode with full access.
-
-## Workflow
-
-1. Open your project in Codex and talk through the feature.
-2. When you're ready, tell Codex: *"use agent bridge to implement X"* (or `$agent-bridge`).
-3. Codex briefs Claude and hands off the chunk. Claude's reasoning and edits stream live
-   in the same view — watch, or step away.
-4. Claude finishes with a summary. Codex reads it, then checks the work itself — reads the
-   diff, runs the tests.
-5. If something's wrong, Codex follows up in the **same** Claude session ("X broke Y — fix
-   it"); Claude fixes and reports. Repeat until it's right.
-6. Codex gives you the verdict: what was built, what it verified, what's left.
-
-You're never the messenger — the agents talk directly; you watch and steer between rounds.
-
-Reset the current conversation's Claude session: `bash ~/.agents/skills/agent-bridge/scripts/ask-claude.sh reset` (add `--all` to clear every thread).
+Sessions persist per conversation (new chat → fresh peer session; follow-ups continue it) in a home-rooted store (`~/.agent-bridge`), kept out of your repos the way `~/.claude` and `~/.codex` are. A depth guard stops runaway A→B→A recursion.
