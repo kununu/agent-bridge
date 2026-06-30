@@ -16,13 +16,11 @@ It's **one [agent-skill](https://agentskills.io)** installed into every agent yo
 
 ## Install
 
-With the [`skills`](https://skills.sh) CLI, install the skill into each agent you want bridged:
+With the [`skills`](https://skills.sh) CLI, install/update the skill into each agent you want bridged:
 
 ```
-npx skills add kununu/agent-bridge -a claude-code,codex -g # -g installs into all projects;
+npx skills add kununu/agent-bridge -g -a claude-code codex # -g installs into all projects;
 ```
-
-To update later, run `npx skills update agent-bridge`.
 
 ## Structure
 
