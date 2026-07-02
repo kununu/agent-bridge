@@ -19,6 +19,7 @@
 #   bash bridge.sh <peer> reset          # clear this chat's session with <peer>
 #   bash bridge.sh reset                 # clear this chat's sessions with all peers
 #   bash bridge.sh reset --all           # clear ALL of this project's bridge state (every chat/agent)
+#   bash bridge.sh -h | --help           # print usage and exit
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,6 +66,30 @@ list_peers() {   # every adapter basename except SELF
   done
 }
 
+usage() {
+  cat <<'EOF'
+agent-bridge — delegate a task to a peer coding agent from whatever agent you're in.
+
+Usage:
+  bash bridge.sh agents                        list peer agents you can call (everyone but you)
+  bash bridge.sh <peer> "task"                 delegate to <peer>, streamed live
+  bash bridge.sh <peer> --effort <lvl> "task"  set reasoning effort, then delegate
+  bash bridge.sh <peer> reset                  clear this chat's session with <peer>
+  bash bridge.sh reset                         clear this chat's sessions with all peers
+  bash bridge.sh reset --all                   clear ALL of this project's bridge state
+  bash bridge.sh -h | --help                   print this help and exit
+
+Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
+Each peer maps these onto its own scale; the run header shows the level actually applied.
+
+Env overrides:
+  <PEER>_BIN=/path/to/cli     point at a peer CLI not on PATH (e.g. CLAUDE_BIN, CODEX_BIN)
+  AGENT_BRIDGE_EFFORT=<lvl>   default effort when --effort is omitted (default: high)
+  AGENT_BRIDGE_STATE_DIR=DIR  where sessions + logs live (default: ~/.agent-bridge)
+  AGENT_BRIDGE_MAX_DEPTH=N    max A→B→A delegation depth before refusing (default: 5)
+EOF
+}
+
 # --- optional reasoning effort -------------------------------------------------------
 # Peers run at a reasoning/thinking level (default high). The calling agent maps the user's
 # words ("think hard", "quick and rough") to a canonical level; each adapter then maps that
@@ -74,6 +99,7 @@ EFFORT="${AGENT_BRIDGE_EFFORT:-high}"
 PASS_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help)  usage; exit 0 ;;
     --effort)   shift; EFFORT="${1:-}"
                 [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
     --effort=*) EFFORT="${1#--effort=}" ;;
@@ -113,7 +139,7 @@ fi
 # --------------------------------------------------------------------- delegate to peer
 TARGET="$CMD1"
 if [ -z "$TARGET" ]; then
-  echo "usage: bash bridge.sh <peer> \"task\"   |   agents   |   <peer> reset   |   reset [--all]" >&2
+  usage >&2
   exit 1
 fi
 
@@ -145,7 +171,7 @@ fi
 # Carry depth + the caller chain in the child env and refuse past a bound. A peer that is
 # itself the bridge will see these and stop. Also lets a peer detect it was bridge-invoked.
 DEPTH="$(( ${AGENT_BRIDGE_DEPTH:-0} + 1 ))"
-MAXD="${AGENT_BRIDGE_MAX_DEPTH:-3}"
+MAXD="${AGENT_BRIDGE_MAX_DEPTH:-5}"
 CHAIN="${AGENT_BRIDGE_CHAIN:+$AGENT_BRIDGE_CHAIN>}$SELF"
 if [ "$DEPTH" -gt "$MAXD" ]; then
   echo "agent-bridge: delegation depth $DEPTH exceeds max $MAXD (chain: $CHAIN>$TARGET). Refusing to recurse." >&2
@@ -228,7 +254,9 @@ fi
 # Persist the peer's session id even if it errored partway: it's emitted early in the
 # stream, so a partial log still carries it. The next call resumes the work-in-progress.
 if [ -n "$SID_KEY" ]; then
-  NEWSID="$(grep -o "\"$SID_KEY\":\"[^\"]*\"" "$LOG" | tail -n1 | sed "s/.*\"$SID_KEY\":\"\([^\"]*\)\".*/\1/")"
+  # `|| true`: an empty/sid-less log makes grep exit 1, which pipefail+set -e would turn into
+  # a spurious script failure that masks the peer's real exit status. Tolerate "no match".
+  NEWSID="$(grep -o "\"$SID_KEY\":\"[^\"]*\"" "$LOG" | tail -n1 | sed "s/.*\"$SID_KEY\":\"\([^\"]*\)\".*/\1/" || true)"
   [ -n "$NEWSID" ] && echo "$NEWSID" > "$SESSION_FILE"
 fi
 

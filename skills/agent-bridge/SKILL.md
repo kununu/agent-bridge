@@ -9,6 +9,8 @@ description: >-
   talking to. The bridge auto-detects which agent you are and offers the others as peers, so
   the same instructions work whichever agent you are running inside. Do NOT trigger for
   normal work the user wants you to do yourself.
+compatibility: >-
+  Requires python3 and the peer agent's CLI (e.g. claude, codex) installed and logged in.
 ---
 
 # agent-bridge — delegate to a peer coding agent
@@ -38,21 +40,27 @@ Run this from the **project root** (where you're already working):
 bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> "your task for the peer"
 ```
 
-- It **streams the peer's reasoning and actions live** — read it as it runs. The peer's
-  final answer comes after the `── <peer> done ──` marker.
-- **Thinking takes time.** Before its first action — and between actions — a peer often
-  reasons for one to a few minutes. For some peers you'll see `· thinking… ~Nk tokens`
-  heartbeats with the count climbing; for others, steady `· exec:` / `· tool:` action lines.
-  **That is the peer working, not stalling — do not interrupt, kill, or restart it** while
-  output is flowing. Only step in if the stream goes fully silent for a long stretch.
-- It keeps **one peer session per conversation, per peer, automatically** — a new chat starts
-  a fresh peer session; within this chat, every call to the same peer continues the same one.
-  So write follow-ups as continuations ("the parser you wrote drops trailing numbers — fix it
-  and rerun the tests"), not as fresh, re-explained tasks. (State lives in a global store at
-  `~/.agent-bridge/projects/<project>/<you>/<chat>/<peer>/`; you don't manage any of it.)
-- Each run's full transcript is saved under that peer's `logs/`.
+- It **streams the peer's reasoning and actions live** — read it as it runs.
+- Each run's full transcript is saved under that peer's `logs/`. State lives in a global store
+  at `~/.agent-bridge/projects/<project>/<you>/<chat>/<peer>/`; you don't manage any of it.
 - If the peer gets confused, or the user asks to start fresh, reset and retry — see
   **Starting a peer over** below.
+
+Read **Gotchas** below before your first run — most "it looks stuck" moments are the peer thinking.
+
+## Gotchas
+
+- **Thinking looks like hanging — it isn't.** Before its first action, and between actions, a
+  peer often reasons for one to a few minutes. Some peers emit `· thinking… ~Nk tokens`
+  heartbeats with a climbing count; others show steady `· exec:` / `· tool:` action lines.
+  That is the peer working. **Do not interrupt, kill, or restart it while output is flowing** —
+  step in only if the stream goes fully silent for a long stretch.
+- **The peer's final answer comes after the `── <peer> done ──` marker.** Everything before it
+  is live reasoning and actions; read the stream, but treat the post-marker text as the answer.
+- **Sessions persist per conversation, per peer.** A new chat starts a fresh peer session;
+  within this chat, every call to the same peer continues the same one. Write follow-ups as
+  continuations ("the parser you wrote drops trailing numbers — fix it and rerun the tests"),
+  not as fresh, re-explained tasks.
 
 ## Reasoning effort
 
