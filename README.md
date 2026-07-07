@@ -42,4 +42,4 @@ skills/agent-bridge/
 
 **The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file, not a code change** — that's what keeps an N×N problem linear.
 
-Sessions persist per conversation (new chat → fresh peer session; follow-ups continue it) in a home-rooted store (`~/.agent-bridge`), kept out of your repos the way `~/.claude` and `~/.codex` are. A depth guard stops runaway A→B→A recursion.
+Sessions persist per conversation *thread* (new chat → fresh peer session; follow-ups continue it) in a home-rooted store (`~/.agent-bridge`). Parallel delegations to the same peer (e.g. helper subagents sharing one chat id) each get their own lane via `--thread <label>`, and a per-thread lock keeps two runs from clobbering one session; plain usage stays on the default `main` thread. A depth guard stops runaway A→B→A recursion.

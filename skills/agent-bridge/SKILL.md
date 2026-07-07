@@ -42,7 +42,9 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> "your task for
 
 - It **streams the peer's reasoning and actions live** — read it as it runs.
 - Each run's full transcript is saved under that peer's `logs/`. State lives in a global store
-  at `~/.agent-bridge/projects/<project>/<you>/<chat>/<peer>/`; you don't manage any of it.
+  at `~/.agent-bridge/projects/<project>/<you>/<chat>/<peer>/<thread>/`; you don't manage any
+  of it. The thread defaults to `main` — you only name threads when running peers in parallel
+  (see **Parallel delegations** below).
 - If the peer gets confused, or the user asks to start fresh, reset and retry — see
   **Starting a peer over** below.
 
@@ -57,10 +59,13 @@ Read **Gotchas** below before your first run — most "it looks stuck" moments a
   step in only if the stream goes fully silent for a long stretch.
 - **The peer's final answer comes after the `── <peer> done ──` marker.** Everything before it
   is live reasoning and actions; read the stream, but treat the post-marker text as the answer.
-- **Sessions persist per conversation, per peer.** A new chat starts a fresh peer session;
-  within this chat, every call to the same peer continues the same one. Write follow-ups as
-  continuations ("the parser you wrote drops trailing numbers — fix it and rerun the tests"),
-  not as fresh, re-explained tasks.
+- **Sessions persist per conversation, per peer, per thread.** A new chat starts a fresh peer
+  session; within this chat, every call to the same peer (on the same thread — `main` unless
+  you name one) continues the same one. Write follow-ups as continuations ("the parser you
+  wrote drops trailing numbers — fix it and rerun the tests"), not as fresh, re-explained tasks.
+- **One run at a time per thread.** If a delegation fails immediately with "already has a run
+  in progress", another run is live on that thread — wait for it, or use your own `--thread`
+  label. (After a crash the stale lock is detected and cleared automatically.)
 
 ## Reasoning effort
 
@@ -77,6 +82,27 @@ thorough"* → `high` or `xhigh`; *"go all out"* → `max`; *"quick / rough / do
 `low`. If the user says nothing about effort, omit the flag (you get `high`). You always pass these
 canonical levels; the bridge maps each to the peer's own setting (some peers cap lower — that's
 expected, and shown in the run header).
+
+## Parallel delegations (threads)
+
+By default all your calls to a peer share **one** session — that's what makes follow-ups work.
+But if several delegations to the same peer run **at the same time** (e.g. you spawn helper
+subagents that each call the bridge), they must not share that session: subagents inherit your
+chat id, so without separation they'd resume each other's context and overwrite each other's
+state. Give each parallel lane its own thread label:
+
+```
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --thread worker-1 "task A"
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --thread worker-2 "task B"
+```
+
+- **When you spawn helper subagents that delegate, put a unique `--thread <label>` in the
+  exact command you hand each helper** — the helper can't tell on its own that it's one of many.
+- Labels are yours to choose — `worker-1`, `review`, `tests` (must start with a letter or digit).
+- Each thread is its own persistent peer session — follow-ups on the same label continue it.
+- A helper that needs a clean slate should reset **only its own lane** —
+  `<peer> reset --thread <its-label>` — never a bare `<peer> reset`, which clears every
+  thread's session for that peer.
 
 ## Brief the peer like the capable engineer it is
 
@@ -108,11 +134,14 @@ stuck or confused, or the user says anything like *"start a new session and try 
 command:
 
 ```
-bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> reset   # just this peer
-bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" reset          # every peer, this chat
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> reset                    # this peer, all threads
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> reset --thread <label>   # one thread only
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" reset                           # every peer, this chat
 ```
 
 Your next call starts that peer from a clean slate. Other conversations are untouched.
+A reset refuses while an affected delegation is live, so it won't wipe a run mid-flight — but
+don't reset while you're spawning parallel helpers, as a brand-new thread can still slip through.
 
 ## Your part of the loop
 
