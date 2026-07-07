@@ -98,10 +98,8 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --thread worke
 
 - **When you spawn helper subagents that delegate, put a unique `--thread <label>` in the
   exact command you hand each helper** — the helper can't tell on its own that it's one of many.
-- Labels are yours to choose (start with a letter/digit, then letters, digits, `.`, `_`, `-`):
-  `worker-1`, `review`, `tests`.
+- Labels are yours to choose — `worker-1`, `review`, `tests` (must start with a letter or digit).
 - Each thread is its own persistent peer session — follow-ups on the same label continue it.
-- Plain calls without `--thread` use the `main` thread; single-peer usage needs no labels at all.
 - A helper that needs a clean slate should reset **only its own lane** —
   `<peer> reset --thread <its-label>` — never a bare `<peer> reset`, which clears every
   thread's session for that peer.
@@ -142,10 +140,8 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" reset                
 ```
 
 Your next call starts that peer from a clean slate. Other conversations are untouched.
-Every reset variant locks what it deletes first, so it refuses while an affected delegation
-is live — and a delegation that starts mid-reset fails fast instead of losing its state.
-(The one remaining race: a delegation creating a brand-new thread label in the same instant
-as a reset can still be swept away — don't reset while you're spawning helpers.)
+A reset refuses while an affected delegation is live, so it won't wipe a run mid-flight — but
+don't reset while you're spawning parallel helpers, as a brand-new thread can still slip through.
 
 ## Your part of the loop
 

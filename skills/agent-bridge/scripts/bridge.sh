@@ -297,9 +297,8 @@ LOG="$THREAD_DIR/logs/$TARGET-$(date +%Y%m%d-%H%M%S)-$$.jsonl"
 ERRLOG="${LOG%.jsonl}.stderr"   # peer's stderr — kept out of the live view, surfaced only on failure
 META_FILE="$CHAT_DIR/meta.json"
 
-# One live run per thread: take the thread lock before reading the session file, hold it
-# until exit. Concurrent same-label runs would resume one peer session in parallel and
-# last-write each other's session id — fail fast instead and point at --thread.
+# One live run per thread (see take_lock): take the lock before reading the session file,
+# hold it until exit. A second run on this label fails fast and is pointed at --thread.
 LOCK="$THREAD_DIR/lock"
 if ! take_lock "$THREAD_DIR"; then
   echo "agent-bridge: thread '$THREAD' with $TARGET already has a run in progress (pid $(readlink "$LOCK" 2>/dev/null))." >&2
