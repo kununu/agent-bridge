@@ -8,7 +8,8 @@
   actions, emitting `· thinking… ~Nk tokens` heartbeats. A climbing count means it's alive
   and working — don't kill it mid-think. Worry only if the stream goes fully silent (no new
   heartbeat, no action) for a long stretch.
-- **Resume:** sessions resume by `session_id`; the bridge persists it for you, so follow-ups
-  in the same chat continue the same Claude session automatically.
+- **Resume:** sessions resume by `session_id`; the bridge persists it for you per thread
+  (`main` unless you pass `--thread`), so follow-ups in the same chat and thread continue
+  the same Claude session automatically.
 - **Good for:** large self-contained implementation, careful multi-file refactors, and
   thorough correctness/edge-case reviews.

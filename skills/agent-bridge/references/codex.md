@@ -8,7 +8,8 @@
   normal, not a hang.
 - **Effort:** set via `-c model_reasoning_effort=…`; the bridge maps canonical levels onto
   Codex's (`low`/`medium`/`high`/`xhigh`), with `max`→`xhigh` — its top reasoning tier.
-- **Resume:** sessions resume by `thread_id`; the bridge persists it for you.
+- **Resume:** sessions resume by `thread_id`; the bridge persists it for you per thread
+  (`main` unless you pass `--thread`), so same-chat, same-thread follow-ups continue it.
 - **Reasoning text** only appears when reasoning summaries are enabled; by default you'll
   see its actions and the final answer (the last `agent_message`).
 - **Good for:** a fast independent second opinion, focused implementation, and red-teaming

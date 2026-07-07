@@ -3,23 +3,27 @@
 #
 # One generic dispatcher for an any-to-any agent bridge. It auto-detects which agent is
 # calling (SELF) and that conversation's id, resolves the requested peer's adapter, runs
-# the peer headless, streams its work live, and keeps ONE peer session per conversation so
-# follow-ups continue where they left off.
+# the peer headless, streams its work live, and keeps ONE peer session per conversation
+# *thread* so follow-ups continue where they left off. Threads exist so parallel helper
+# subagents (which all inherit the primary's chat id) don't clobber each other's peer
+# session: each helper delegates under its own --thread label; plain use stays on 'main'.
 #
 # State lives in a global, home-rooted store keyed by project — mirroring how Claude
 # (~/.claude/projects) and Codex (~/.codex) keep their own session history OUT of your repos:
-#   ~/.agent-bridge/projects/<project-slug>/<self>/<chat>/<peer>/{session,logs}
+#   ~/.agent-bridge/projects/<project-slug>/<self>/<chat>/<peer>/<thread>/{session,logs}
 #                                            <self>/<chat>/meta.json
 # <self> is recorded because a chat id is an opaque UUID — you can't tell from it which agent
 # was primary. Override the root with AGENT_BRIDGE_STATE_DIR (e.g. to keep logs inside a repo).
 #
 # Usage:
-#   bash bridge.sh agents                # list peer agents you can call (everyone but you)
-#   bash bridge.sh <peer> "task"         # delegate to <peer>, stream it live
-#   bash bridge.sh <peer> reset          # clear this chat's session with <peer>
-#   bash bridge.sh reset                 # clear this chat's sessions with all peers
-#   bash bridge.sh reset --all           # clear ALL of this project's bridge state (every chat/agent)
-#   bash bridge.sh -h | --help           # print usage and exit
+#   bash bridge.sh agents                    # list peer agents you can call (everyone but you)
+#   bash bridge.sh <peer> "task"             # delegate to <peer>, stream it live
+#   bash bridge.sh <peer> --thread L "task"  # same, on a separate thread (own peer session)
+#   bash bridge.sh <peer> reset              # clear this chat's sessions with <peer> (all threads)
+#   bash bridge.sh <peer> reset --thread L   # clear just thread L with <peer>
+#   bash bridge.sh reset                     # clear this chat's sessions with all peers
+#   bash bridge.sh reset --all               # clear ALL of this project's bridge state (every chat/agent)
+#   bash bridge.sh -h | --help               # print usage and exit
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -74,7 +78,9 @@ Usage:
   bash bridge.sh agents                        list peer agents you can call (everyone but you)
   bash bridge.sh <peer> "task"                 delegate to <peer>, streamed live
   bash bridge.sh <peer> --effort <lvl> "task"  set reasoning effort, then delegate
-  bash bridge.sh <peer> reset                  clear this chat's session with <peer>
+  bash bridge.sh <peer> --thread <label> "task"  delegate on a separate thread (own peer session)
+  bash bridge.sh <peer> reset                  clear this chat's sessions with <peer> (all threads)
+  bash bridge.sh <peer> reset --thread <label> clear just that thread with <peer>
   bash bridge.sh reset                         clear this chat's sessions with all peers
   bash bridge.sh reset --all                   clear ALL of this project's bridge state
   bash bridge.sh -h | --help                   print this help and exit
@@ -82,20 +88,35 @@ Usage:
 Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
 Each peer maps these onto its own scale; the run header shows the level actually applied.
 
+Threads (for --thread): each label keeps its own peer session under this chat (default: main).
+Use one label per parallel helper so concurrent delegations don't share a session. Labels
+start with a letter/digit, then letters, digits, '.', '_', '-'. A '--' ends option parsing
+(use it when the task text itself starts with a dash).
+
 Env overrides:
   <PEER>_BIN=/path/to/cli     point at a peer CLI not on PATH (e.g. CLAUDE_BIN, CODEX_BIN)
   AGENT_BRIDGE_EFFORT=<lvl>   default effort when --effort is omitted (default: high)
+  AGENT_BRIDGE_THREAD=<label> thread for delegations when --thread is omitted (default: main);
+                              does NOT scope resets — narrowing a reset takes the explicit flag
   AGENT_BRIDGE_STATE_DIR=DIR  where sessions + logs live (default: ~/.agent-bridge)
   AGENT_BRIDGE_MAX_DEPTH=N    max A→B→A delegation depth before refusing (default: 5)
 EOF
 }
 
-# --- optional reasoning effort -------------------------------------------------------
+# --- optional reasoning effort + thread ----------------------------------------------
 # Peers run at a reasoning/thinking level (default high). The calling agent maps the user's
 # words ("think hard", "quick and rough") to a canonical level; each adapter then maps that
 # to its own term (Claude's --effort, Codex's model_reasoning_effort). Pull `--effort <level>`
-# out here so the rest stays positional — agents / reset / "<task>" are untouched.
+# and `--thread <label>` out here so the rest stays positional — agents / reset / "<task>"
+# are untouched. A thread is an independent lane to a peer within this chat: parallel helper
+# subagents inherit the primary's chat id, so without distinct labels they'd share (and
+# clobber) one peer session.
 EFFORT="${AGENT_BRIDGE_EFFORT:-high}"
+THREAD="${AGENT_BRIDGE_THREAD:-main}"
+# THREAD_SET is set by the --thread flag ONLY: it scopes `<peer> reset` down to one thread,
+# and an *inherited* AGENT_BRIDGE_THREAD must never silently change what a reset deletes —
+# the env var picks your delegation lane, the flag states reset intent.
+THREAD_SET=""
 PASS_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -103,17 +124,76 @@ while [ $# -gt 0 ]; do
     --effort)   shift; EFFORT="${1:-}"
                 [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
     --effort=*) EFFORT="${1#--effort=}" ;;
+    --thread)   shift; THREAD="${1:-}"; THREAD_SET=1
+                [ -z "$THREAD" ] && { echo "agent-bridge: --thread needs a label" >&2; exit 1; } ;;
+    --thread=*) THREAD="${1#--thread=}"; THREAD_SET=1 ;;
+    --)         shift; PASS_ARGS+=("$@"); break ;;   # everything after -- is positional (prompt may look like a flag)
     *)          PASS_ARGS+=("$1") ;;
   esac
   shift
 done
 set -- "${PASS_ARGS[@]}"
 
+# The label becomes a directory name, so keep it to safe characters. Requiring an alnum
+# first char kills three birds: no path hops (. / ..), no hidden dirs the reset globs and
+# `ls` would miss (.review), and no flag-shaped labels from a swallowed option
+# (`--thread --effort` would otherwise run with label '--effort').
+case "$THREAD" in
+  ''|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*)
+    echo "agent-bridge: invalid thread label '$THREAD' — start with a letter/digit, then letters, digits, '.', '_', '-'." >&2
+    exit 1 ;;
+esac
+
+# Each thread dir has a lock guarding the whole read-session -> run-peer -> write-session
+# span: two runs on the same thread label would resume the same peer session concurrently
+# and last-write each other's session id, so the loser fails fast instead. The lock is a
+# symlink whose *target* is the holder's pid — creation and pid publication are one atomic
+# syscall, so there is never a moment where the lock exists without an owner (a lock dir +
+# pid file would have that gap, and a second run could mistake it for stale). A dead
+# holder's lock is stale (crash, kill -9 — the EXIT trap never fired) and may be stolen.
+# Resets take the same locks before deleting, so "is it busy?" and "keep it from starting"
+# are one atomic step — a scan-then-delete would let a delegation start in between and be
+# wiped mid-run.
+take_lock() {   # $1 = thread dir; acquire its lock for this process
+  local lock="$1/lock" pid
+  ln -s "$$" "$lock" 2>/dev/null && return 0
+  pid="$(readlink "$lock" 2>/dev/null)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then return 1; fi   # live holder
+  # Claim the stale lock by renaming it aside: rename is atomic, so of N contenders that
+  # all saw it stale, exactly one mv succeeds. A plain rm+recreate here would let two
+  # contenders interleave (B's rm deleting A's fresh lock) and both enter the run.
+  if mv "$lock" "$lock.stale.$$" 2>/dev/null; then
+    rm -f "$lock.stale.$$"
+    ln -s "$$" "$lock" 2>/dev/null && return 0   # if this loses the re-take race, report busy
+  fi
+  return 1
+}
+
+# Lock every thread dir under $1 (they sit exactly $2 levels down) so a reset can delete
+# the subtree: once all locks are held nothing can start on those labels, and the locks go
+# down with the tree — no release needed. Any lock we can't take means a live delegation:
+# release what we took (BUSY_DIR tells the caller which thread refused) and leave
+# everything running.
+lock_all_threads() {   # $1 = state subtree, $2 = depth of thread dirs below it
+  LOCKED=(); BUSY_DIR=""
+  local d l
+  while IFS= read -r d; do
+    if take_lock "$d"; then
+      LOCKED+=("$d/lock")
+    else
+      BUSY_DIR="$d"
+      for l in "${LOCKED[@]}"; do rm -f "$l"; done
+      return 1
+    fi
+  done < <(find "$1" -mindepth "$2" -maxdepth "$2" -type d 2>/dev/null)
+  return 0
+}
+
 # ----------------------------------------------------------- subcommands: agents/reset
 CMD1="${1:-}"
 
 if [ "$CMD1" = "agents" ]; then
-  echo "agent-bridge · you are: $SELF · chat: ${CHAT:0:8} · project: $PROJECT_ROOT"
+  echo "agent-bridge · you are: $SELF · chat: ${CHAT:0:8} · thread: $THREAD · project: $PROJECT_ROOT"
   peers="$(list_peers)"
   if [ -z "$peers" ]; then
     echo "peers you can call: (none found in $ADAPTER_DIR)"
@@ -126,10 +206,20 @@ if [ "$CMD1" = "agents" ]; then
 fi
 
 if [ "$CMD1" = "reset" ]; then
+  # Thread dirs sit at <self>/<chat>/<peer>/<thread> under the project, <peer>/<thread>
+  # under a chat — lock them all, then the tree can go (locks are deleted with it).
   if [ "${2:-}" = "--all" ]; then
+    if ! lock_all_threads "$PROJECT_DIR" 4; then
+      echo "agent-bridge: a delegation is running right now ($BUSY_DIR) — not resetting. Retry when it finishes." >&2
+      exit 1
+    fi
     rm -rf "$PROJECT_DIR"
     echo "agent-bridge: cleared ALL bridge sessions for project $PROJECT_ROOT."
   else
+    if ! lock_all_threads "$CHAT_DIR" 2; then
+      echo "agent-bridge: a delegation is running right now ($BUSY_DIR) — not resetting. Retry when it finishes." >&2
+      exit 1
+    fi
     rm -rf "$CHAT_DIR"
     echo "agent-bridge: cleared this chat's peer sessions (you=$SELF, chat ${CHAT:0:8})."
   fi
@@ -153,10 +243,26 @@ if [ "$TARGET" = "$SELF" ]; then
   exit 1
 fi
 
-# `<peer> reset` clears just this chat's session with that peer.
+# `<peer> reset` clears this chat's sessions with that peer — all threads, or just one when
+# `--thread <label>` was passed (the flag, not the env var — see THREAD_SET above). It locks
+# whatever it deletes first, so a reset can't yank state out from under a live delegation
+# (nor one that starts mid-reset — it'll fail fast on the reset's own lock).
 if [ "${2:-}" = "reset" ]; then
-  rm -rf "$CHAT_DIR/$TARGET"
-  echo "agent-bridge: cleared this chat's session with $TARGET (you=$SELF, chat ${CHAT:0:8})."
+  if [ -n "$THREAD_SET" ]; then
+    if [ -d "$CHAT_DIR/$TARGET/$THREAD" ] && ! take_lock "$CHAT_DIR/$TARGET/$THREAD"; then
+      echo "agent-bridge: thread '$THREAD' with $TARGET is running right now — not resetting it." >&2
+      exit 1
+    fi
+    rm -rf "$CHAT_DIR/$TARGET/$THREAD"
+    echo "agent-bridge: cleared thread '$THREAD' with $TARGET (you=$SELF, chat ${CHAT:0:8})."
+  else
+    if ! lock_all_threads "$CHAT_DIR/$TARGET" 1; then
+      echo "agent-bridge: thread '$(basename "$BUSY_DIR")' with $TARGET is running right now — not resetting. Retry when it finishes, or reset just an idle thread with --thread." >&2
+      exit 1
+    fi
+    rm -rf "$CHAT_DIR/$TARGET"
+    echo "agent-bridge: cleared this chat's sessions with $TARGET, all threads (you=$SELF, chat ${CHAT:0:8})."
+  fi
   exit 0
 fi
 
@@ -181,16 +287,29 @@ export AGENT_BRIDGE_DEPTH="$DEPTH"
 export AGENT_BRIDGE_CHAIN="$CHAIN"
 export AGENT_BRIDGE_INVOKED_BY="$SELF"
 
-# --- session state for (this project, this primary, this chat, this peer) -----------
-THREAD_DIR="$CHAT_DIR/$TARGET"
+# --- session state for (this project, this primary, this chat, this peer, this thread)
+THREAD_DIR="$CHAT_DIR/$TARGET/$THREAD"
 mkdir -p "$THREAD_DIR/logs"
 SESSION_FILE="$THREAD_DIR/session"
-LOG="$THREAD_DIR/logs/$TARGET-$(date +%Y%m%d-%H%M%S).jsonl"
+# PID suffix: within one thread runs are serialized by the lock, but a same-second run
+# right after a crash-steal could otherwise reuse the previous run's filename.
+LOG="$THREAD_DIR/logs/$TARGET-$(date +%Y%m%d-%H%M%S)-$$.jsonl"
 ERRLOG="${LOG%.jsonl}.stderr"   # peer's stderr — kept out of the live view, surfaced only on failure
 META_FILE="$CHAT_DIR/meta.json"
 
+# One live run per thread: take the thread lock before reading the session file, hold it
+# until exit. Concurrent same-label runs would resume one peer session in parallel and
+# last-write each other's session id — fail fast instead and point at --thread.
+LOCK="$THREAD_DIR/lock"
+if ! take_lock "$THREAD_DIR"; then
+  echo "agent-bridge: thread '$THREAD' with $TARGET already has a run in progress (pid $(readlink "$LOCK" 2>/dev/null))." >&2
+  echo "  Wait for it, or delegate on your own lane: bash bridge.sh $TARGET --thread <label> \"...\"" >&2
+  exit 1
+fi
+trap 'rm -f "$LOCK"' EXIT
+
 # Self-describing metadata for this chat (best-effort; never blocks the run).
-python3 "$SCRIPT_DIR/meta.py" "$META_FILE" "$PROJECT_ROOT" "$SELF" "$CHAT" "$TARGET" "$PROMPT" 2>/dev/null || true
+python3 "$SCRIPT_DIR/meta.py" "$META_FILE" "$PROJECT_ROOT" "$SELF" "$CHAT" "$TARGET" "$PROMPT" "$THREAD" 2>/dev/null || true
 
 MODE="new"; SID=""
 if [ -f "$SESSION_FILE" ]; then
@@ -228,7 +347,7 @@ fi
 # Show the requested level; add the peer's mapped term when it differs (e.g. Codex caps max→high).
 EFFORT_DISP="$EFFORT"
 [ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="$EFFORT→$PEER_EFFORT"
-echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · effort $EFFORT_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
+echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
 
 # Run the peer's full harness, streamed live:
 #   stdout -> log (pure JSONL: source of truth + where we read the session id back)
@@ -257,7 +376,11 @@ if [ -n "$SID_KEY" ]; then
   # `|| true`: an empty/sid-less log makes grep exit 1, which pipefail+set -e would turn into
   # a spurious script failure that masks the peer's real exit status. Tolerate "no match".
   NEWSID="$(grep -o "\"$SID_KEY\":\"[^\"]*\"" "$LOG" | tail -n1 | sed "s/.*\"$SID_KEY\":\"\([^\"]*\)\".*/\1/" || true)"
-  [ -n "$NEWSID" ] && echo "$NEWSID" > "$SESSION_FILE"
+  # Write-then-rename so a reader never sees a torn/empty session file.
+  if [ -n "$NEWSID" ]; then
+    printf '%s\n' "$NEWSID" > "$SESSION_FILE.tmp.$$"
+    mv -f "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+  fi
 fi
 
 exit "$status"
