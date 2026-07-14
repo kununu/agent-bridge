@@ -83,6 +83,28 @@ thorough"* → `high` or `xhigh`; *"go all out"* → `max`; *"quick / rough / do
 canonical levels; the bridge maps each to the peer's own setting (some peers cap lower — that's
 expected, and shown in the run header).
 
+## Model
+
+By default the bridge sends **no model flag** — the peer runs on whatever its own CLI is
+configured to use (or on `AGENT_BRIDGE_MODEL`, if the user exported one to pin a bridge-wide
+default). To pick a capability tier instead, pass `--model`:
+
+```
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --model <tier> "your task"
+```
+
+Tiers are `fast` · `standard` · `max` (fast → the peer's cheapest model that's still strong
+at coding, max → its strongest). The bridge maps each onto the peer's own lineup — e.g.
+`fast` is Sonnet on Claude and Luna on Codex; the run header shows the model actually used.
+**Translate the user's words into a tier, and combine it with effort** — e.g. *"small/quick
+task"* → `--model fast --effort low`; *"hardest problem, go all out"* → `--model max
+--effort max`. If the user says nothing about model or size, omit the flag — the peer's
+own default is the right call. Anything that isn't a known tier (e.g. `--model haiku`) is
+passed to the peer CLI verbatim, so specific or brand-new model names work too. When the
+user names a model colloquially (*"use luna"*, *"sonnet please"*), pass the tier it maps to
+(each peer's lineup is in `references/<peer>.md`) rather than the nickname — a bare nickname
+may not be a valid model ID for that CLI.
+
 ## Parallel delegations (threads)
 
 By default all your calls to a peer share **one** session — that's what makes follow-ups work.

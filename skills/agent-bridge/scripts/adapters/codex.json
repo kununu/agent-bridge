@@ -3,9 +3,12 @@
   "stream_format": "codex-jsonl",
   "sid_key": "thread_id",
   "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh" },
+  "model_map": { "fast": "gpt-5.6-luna", "standard": "gpt-5.6-terra", "max": "gpt-5.6-sol" },
+  "model_args": ["-m", "{model}"],
   "cmd_new": [
     "exec",
     "-c", "model_reasoning_effort={effort}",
+    "{model_args}",
     "--json",
     "--sandbox", "danger-full-access",
     "--skip-git-repo-check",
@@ -14,6 +17,7 @@
   "cmd_resume": [
     "exec",
     "-c", "model_reasoning_effort={effort}",
+    "{model_args}",
     "--json",
     "--sandbox", "danger-full-access",
     "--skip-git-repo-check",

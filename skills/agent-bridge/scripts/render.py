@@ -158,6 +158,9 @@ def render_codex():
             return f"  · search: {trim(it.get('query', ''))}" if started else ""
         if itype in ("agent_message", "reasoning"):
             return ""   # handled inline by the caller
+        if itype == "error":
+            # e.g. "session was recorded with model X but is resuming with Y" — never drop these
+            return f"  · error: {trim(it.get('message', ''))}"
         return f"  · {itype}" if started else ""
 
     for line in sys.stdin:

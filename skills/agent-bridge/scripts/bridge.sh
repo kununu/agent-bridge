@@ -78,6 +78,7 @@ Usage:
   bash bridge.sh agents                        list peer agents you can call (everyone but you)
   bash bridge.sh <peer> "task"                 delegate to <peer>, streamed live
   bash bridge.sh <peer> --effort <lvl> "task"  set reasoning effort, then delegate
+  bash bridge.sh <peer> --model <tier> "task"  pick the peer's model, then delegate
   bash bridge.sh <peer> --thread <label> "task"  delegate on a separate thread (own peer session)
   bash bridge.sh <peer> reset                  clear this chat's sessions with <peer> (all threads)
   bash bridge.sh <peer> reset --thread <label> clear just that thread with <peer>
@@ -88,6 +89,11 @@ Usage:
 Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
 Each peer maps these onto its own scale; the run header shows the level actually applied.
 
+Model tiers (for --model): fast | standard | max — each peer maps the tier onto its own
+lineup (see its adapter's model_map); any other value is passed to the peer CLI verbatim,
+so brand-new models work before the map knows them. Omitted (the default): no model flag
+is sent and the peer CLI's own configured default applies.
+
 Threads (for --thread): each label keeps its own peer session under this chat (default: main).
 Use one label per parallel helper so concurrent delegations don't share a session. Labels
 start with a letter/digit, then letters, digits, '.', '_', '-'. A '--' ends option parsing
@@ -96,6 +102,7 @@ start with a letter/digit, then letters, digits, '.', '_', '-'. A '--' ends opti
 Env overrides:
   <PEER>_BIN=/path/to/cli     point at a peer CLI not on PATH (e.g. CLAUDE_BIN, CODEX_BIN)
   AGENT_BRIDGE_EFFORT=<lvl>   default effort when --effort is omitted (default: high)
+  AGENT_BRIDGE_MODEL=<tier>   default model when --model is omitted (default: none — CLI default)
   AGENT_BRIDGE_THREAD=<label> thread for delegations when --thread is omitted (default: main);
                               does NOT scope resets — narrowing a reset takes the explicit flag
   AGENT_BRIDGE_STATE_DIR=DIR  where sessions + logs live (default: ~/.agent-bridge)
@@ -103,15 +110,18 @@ Env overrides:
 EOF
 }
 
-# --- optional reasoning effort + thread ----------------------------------------------
+# --- optional reasoning effort + model + thread ---------------------------------------
 # Peers run at a reasoning/thinking level (default high). The calling agent maps the user's
 # words ("think hard", "quick and rough") to a canonical level; each adapter then maps that
-# to its own term (Claude's --effort, Codex's model_reasoning_effort). Pull `--effort <level>`
-# and `--thread <label>` out here so the rest stays positional — agents / reset / "<task>"
-# are untouched. A thread is an independent lane to a peer within this chat: parallel helper
-# subagents inherit the primary's chat id, so without distinct labels they'd share (and
-# clobber) one peer session.
+# to its own term (Claude's --effort, Codex's model_reasoning_effort). Model works the same
+# way — canonical tiers (fast/standard/max) mapped per adapter — except it has NO default:
+# when unset the bridge sends no model flag and the peer CLI's own default applies. Pull
+# `--effort <level>`, `--model <tier>` and `--thread <label>` out here so the rest stays
+# positional — agents / reset / "<task>" are untouched. A thread is an independent lane to
+# a peer within this chat: parallel helper subagents inherit the primary's chat id, so
+# without distinct labels they'd share (and clobber) one peer session.
 EFFORT="${AGENT_BRIDGE_EFFORT:-high}"
+MODEL="${AGENT_BRIDGE_MODEL:-}"
 THREAD="${AGENT_BRIDGE_THREAD:-main}"
 # THREAD_SET is set by the --thread flag ONLY: it scopes `<peer> reset` down to one thread,
 # and an *inherited* AGENT_BRIDGE_THREAD must never silently change what a reset deletes —
@@ -123,7 +133,12 @@ while [ $# -gt 0 ]; do
     -h|--help)  usage; exit 0 ;;
     --effort)   shift; EFFORT="${1:-}"
                 [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
-    --effort=*) EFFORT="${1#--effort=}" ;;
+    --effort=*) EFFORT="${1#--effort=}"
+                [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
+    --model)    shift; MODEL="${1:-}"
+                [ -z "$MODEL" ] && { echo "agent-bridge: --model needs a tier (fast|standard|max) or a model name" >&2; exit 1; } ;;
+    --model=*)  MODEL="${1#--model=}"
+                [ -z "$MODEL" ] && { echo "agent-bridge: --model needs a tier (fast|standard|max) or a model name" >&2; exit 1; } ;;
     --thread)   shift; THREAD="${1:-}"; THREAD_SET=1
                 [ -z "$THREAD" ] && { echo "agent-bridge: --thread needs a label" >&2; exit 1; } ;;
     --thread=*) THREAD="${1#--thread=}"; THREAD_SET=1 ;;
@@ -317,7 +332,7 @@ fi
 
 # Build argv + read adapter fields (BIN, STREAM_FORMAT, SID_KEY, ARGS) in one shot. The
 # helper shlex-quotes everything, so the eval is safe even with a hostile prompt/sid.
-ADAPTER_SH="$(python3 "$SCRIPT_DIR/adapter.py" "$ADAPTER_FILE" "$MODE" "$PROMPT" "$SID" "$EFFORT")" || {
+ADAPTER_SH="$(python3 "$SCRIPT_DIR/adapter.py" "$ADAPTER_FILE" "$MODE" "$PROMPT" "$SID" "$EFFORT" "$MODEL")" || {
   echo "agent-bridge: failed to read adapter '$TARGET' ($ADAPTER_FILE)." >&2
   exit 1
 }
@@ -344,9 +359,18 @@ if [ -z "$BIN_PATH" ]; then
 fi
 
 # Show the requested level; add the peer's mapped term when it differs (e.g. Codex caps max→high).
+# Braces before the arrow are load-bearing: without them bash 3.2 under a Latin-1-ish locale
+# lexes the first byte of '→' (0xE2, a letter there) into the variable name and expands the
+# whole thing to empty.
 EFFORT_DISP="$EFFORT"
-[ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="$EFFORT→$PEER_EFFORT"
-echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
+[ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="${EFFORT}→${PEER_EFFORT}"
+# Same for the model, shown only when one was requested (otherwise the CLI default applies).
+MODEL_DISP=""
+if [ -n "$MODEL" ]; then
+  MODEL_DISP=" · model $MODEL"
+  [ -n "${PEER_MODEL:-}" ] && [ "$PEER_MODEL" != "$MODEL" ] && MODEL_DISP=" · model ${MODEL}→${PEER_MODEL}"
+fi
+echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP$MODEL_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
 
 # Run the peer's full harness, streamed live:
 #   stdout -> log (pure JSONL: source of truth + where we read the session id back)
