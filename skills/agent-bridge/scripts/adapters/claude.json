@@ -3,7 +3,7 @@
   "stream_format": "claude-stream-json",
   "sid_key": "session_id",
   "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max" },
-  "model_map": { "fast": "sonnet", "standard": "opus", "max": "fable" },
+  "model_map": { "top": "fable" },
   "model_args": ["--model", "{model}"],
   "cmd_new": [
     "-p", "{prompt}",

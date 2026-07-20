@@ -8,13 +8,10 @@
   normal, not a hang.
 - **Effort:** set via `-c model_reasoning_effort=…`; the bridge maps canonical levels onto
   Codex's (`low`/`medium`/`high`/`xhigh`), with `max`→`xhigh` — its top reasoning tier.
-- **Model:** set via `-m`; the bridge's tiers map to the GPT-5.6 family —
-  `fast`→`gpt-5.6-luna`, `standard`→`gpt-5.6-terra`, `max`→`gpt-5.6-sol`. Luna is no toy:
-  it out-scores Terra on Terminal-Bench, so `fast` is a solid coding tier. These are
-  versioned IDs — bump the `model_map` in `adapters/codex.json` when a new generation
-  ships. No `--model` → the user's `~/.codex/config.toml` default. Switching model
-  mid-session (on resume) works but Codex warns it may hurt performance — pick the tier
-  when a thread starts, or reset first.
+- **Model:** set via `-m`; `--model top` → `gpt-5.6-sol`, and the short names `sol` /
+  `terra` / `luna` resolve to their full GPT-5.6 IDs. The cheapest that's still solid at
+  coding is `luna`. A mid-thread model switch makes Codex print an `· error:`-labeled
+  warning in the stream — informational, the run continues.
 - **Resume:** sessions resume by `thread_id`; the bridge persists it for you per thread
   (`main` unless you pass `--thread`), so same-chat, same-thread follow-ups continue it.
 - **Reasoning text** only appears when reasoning summaries are enabled; by default you'll

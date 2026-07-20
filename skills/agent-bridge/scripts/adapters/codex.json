@@ -3,7 +3,7 @@
   "stream_format": "codex-jsonl",
   "sid_key": "thread_id",
   "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh" },
-  "model_map": { "fast": "gpt-5.6-luna", "standard": "gpt-5.6-terra", "max": "gpt-5.6-sol" },
+  "model_map": { "top": "gpt-5.6-sol", "sol": "gpt-5.6-sol", "terra": "gpt-5.6-terra", "luna": "gpt-5.6-luna" },
   "model_args": ["-m", "{model}"],
   "cmd_new": [
     "exec",

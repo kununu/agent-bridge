@@ -2,7 +2,7 @@
 """Read a peer adapter (JSON) and emit shell assignments the dispatcher evals.
 
 Usage:
-    adapter.py <adapter.json> <new|resume> <prompt> [sid] [effort] [model]
+    adapter.py <adapter.json> <new|resume> <prompt> [sid] [effort] [model] [model_resolved]
 
 Emits shell-safe assignments (values quoted with shlex so a hostile prompt or
 session id can't break out of the eval):
@@ -22,7 +22,10 @@ Model is optional and works like effort with two twists. There is no default: wh
 is requested, the `{model_args}` placeholder element in the cmd template is dropped entirely,
 no model flag reaches the peer, and its CLI's own configured default applies. And unlike
 effort, a value missing from `model_map` is passed through verbatim — model names are
-open-ended, so `--model gpt-9-nova` must work the day it ships, before any map knows it.
+open-ended, so a brand-new ID must work the day it ships, before any map knows it.
+model_resolved=1 marks a model the bridge inherited from a thread's stored (already
+resolved) choice: it skips `model_map`, so a map entry that happens to match a stored ID
+can never silently remap a pinned thread.
 """
 import sys
 import json
@@ -32,13 +35,14 @@ import shlex
 
 def main():
     if len(sys.argv) < 4:
-        sys.stderr.write("usage: adapter.py <adapter.json> <new|resume> <prompt> [sid] [effort] [model]\n")
+        sys.stderr.write("usage: adapter.py <adapter.json> <new|resume> <prompt> [sid] [effort] [model] [model_resolved]\n")
         return 2
 
     path, mode, prompt = sys.argv[1], sys.argv[2], sys.argv[3]
     sid = sys.argv[4] if len(sys.argv) > 4 else ""
     effort = sys.argv[5] if len(sys.argv) > 5 else ""
     model = sys.argv[6] if len(sys.argv) > 6 else ""
+    model_resolved = len(sys.argv) > 7 and sys.argv[7] == "1"
 
     try:
         with open(path) as f:
@@ -65,23 +69,36 @@ def main():
             peer_effort = effort_map.get("high", effort)
             sys.stderr.write(f"adapter.py: unknown effort '{effort}' for this peer, using '{peer_effort}'\n")
 
-    # Canonical tier -> this peer's model name; anything not in the map passes through
-    # verbatim (model names are open-ended — a brand-new model must work unmapped).
-    peer_model = (adapter.get("model_map") or {}).get(model, model) if model else ""
+    # 'top' or a short name -> this peer's model ID; anything not in the map passes through
+    # verbatim (model names are open-ended — a brand-new model must work unmapped). An
+    # already-resolved model (inherited from the thread's store) skips the map entirely.
+    if not model:
+        peer_model = ""
+    elif model_resolved:
+        peer_model = model
+    else:
+        peer_model = (adapter.get("model_map") or {}).get(model, model)
     model_args = adapter.get("model_args")
-    if model and not isinstance(model_args, list):
+    if model and not (isinstance(model_args, list) and model_args):
         sys.stderr.write(f"adapter.py: this peer has no 'model_args' — ignoring model '{model}'\n")
         peer_model = ""
 
     args = []
+    model_args_used = False
     for el in template:
         # The placeholder element expands to the peer's model flag(s) — or to nothing,
         # so an omitted model sends no flag and the peer CLI's own default applies.
         if str(el) == "{model_args}":
+            model_args_used = True
             if peer_model:
                 args.extend(str(m) for m in model_args)
             continue
         args.append(str(el))
+    # A template without the placeholder never sends the model — report PEER_MODEL as empty
+    # so the bridge neither displays nor stores a model the peer didn't receive.
+    if peer_model and not model_args_used:
+        sys.stderr.write(f"adapter.py: '{key}' has no '{{model_args}}' placeholder — ignoring model '{model}'\n")
+        peer_model = ""
     # Single-pass substitution: replacement values are never rescanned for placeholders,
     # so a prompt containing '{sid}' — or a hostile model name like '{prompt}' — stays literal
     # (chained .replace() calls would re-expand tokens inside earlier substitutions).
