@@ -135,7 +135,8 @@ while [ $# -gt 0 ]; do
     # Separated values must not look like flags: a missing value would otherwise swallow
     # the next option and silently run the wrong task ('--model --thread review "task"'
     # would run model '--thread' on thread 'main' with prompt 'review'). The '=' forms
-    # stay the escape hatch for genuinely dash-leading values.
+    # remain a parse-level escape hatch — the bridge passes a dash-leading value through,
+    # though the peer CLI's own parser may still reject it.
     --effort)   shift; EFFORT="${1:-}"
                 case "$EFFORT" in ''|-*) echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1;; esac ;;
     --effort=*) EFFORT="${1#--effort=}"
@@ -419,6 +420,9 @@ fi
 
 # Persist the peer's session id even if it errored partway: it's emitted early in the
 # stream, so a partial log still carries it. The next call resumes the work-in-progress.
+# Init first: the model-persist check below reads NEWSID as "the peer emitted a session id
+# THIS run" — for a sid-key-less adapter it would otherwise leak in from the environment.
+NEWSID=""
 if [ -n "$SID_KEY" ]; then
   # `|| true`: an empty/sid-less log makes grep exit 1, which pipefail+set -e would turn into
   # a spurious script failure that masks the peer's real exit status. Tolerate "no match".

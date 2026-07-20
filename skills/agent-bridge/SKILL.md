@@ -85,10 +85,10 @@ expected, and shown in the run header).
 
 ## Model
 
-By default the bridge sends **no model flag** — the peer runs on whatever its own CLI is
-configured to use, and that's the right call whenever the user doesn't bring up models.
-Pick one only when the user names a model or clearly asks for a capability (*"strongest"*,
-*"cheapest"*):
+On a fresh thread the bridge sends **no model flag** — the peer runs on whatever its own
+CLI is configured to use (a thread that already pinned a model reuses it — see below).
+That's the right call whenever the user doesn't bring up models. Pick one only when the
+user names a model or clearly asks for a capability (*"strongest"*, *"cheapest"*):
 
 ```
 bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --model <model> "your task"
@@ -96,9 +96,9 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --model <model
 
 `--model` takes one peer-independent value — `top`, the peer's strongest coding model — or
 a model's short name (e.g. `sonnet`, `luna`); each peer's lineup lives in
-`references/<peer>.md`, and the bridge resolves the name to a real model ID. Anything it
-doesn't recognize is passed to the peer CLI verbatim, so exact or brand-new model IDs work
-too. **Normalize the user's wording yourself**: *"Claude's best model"* → `--model top`;
+`references/<peer>.md`, and the adapter translates the name into the peer CLI's own model
+argument. Anything it doesn't recognize is passed to the peer CLI verbatim, so exact or
+brand-new model IDs work too. **Normalize the user's wording yourself**: *"Claude's best model"* → `--model top`;
 *"codex tera"* (typo) → `--model terra`; *"codex's cheapest"* → the cheapest model named in
 that peer's reference notes.
 

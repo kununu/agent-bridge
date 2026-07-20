@@ -82,6 +82,11 @@ def main():
     if model and not (isinstance(model_args, list) and model_args):
         sys.stderr.write(f"adapter.py: this peer has no 'model_args' — ignoring model '{model}'\n")
         peer_model = ""
+    elif peer_model and not any("{model}" in str(m) for m in model_args):
+        # PEER_MODEL non-empty must mean the peer received THAT model; model_args that
+        # never interpolate it (e.g. ["--fixed-model"]) would display/store a lie.
+        sys.stderr.write(f"adapter.py: 'model_args' has no '{{model}}' placeholder — ignoring model '{model}'\n")
+        peer_model = ""
 
     args = []
     model_args_used = False
