@@ -102,7 +102,6 @@ start with a letter/digit, then letters, digits, '.', '_', '-'. A '--' ends opti
 Env overrides:
   <PEER>_BIN=/path/to/cli     point at a peer CLI not on PATH (e.g. CLAUDE_BIN, CODEX_BIN)
   AGENT_BRIDGE_EFFORT=<lvl>   default effort when --effort is omitted (default: high)
-  AGENT_BRIDGE_MODEL=<tier>   default model when --model is omitted (default: none — CLI default)
   AGENT_BRIDGE_THREAD=<label> thread for delegations when --thread is omitted (default: main);
                               does NOT scope resets — narrowing a reset takes the explicit flag
   AGENT_BRIDGE_STATE_DIR=DIR  where sessions + logs live (default: ~/.agent-bridge)
@@ -121,7 +120,7 @@ EOF
 # a peer within this chat: parallel helper subagents inherit the primary's chat id, so
 # without distinct labels they'd share (and clobber) one peer session.
 EFFORT="${AGENT_BRIDGE_EFFORT:-high}"
-MODEL="${AGENT_BRIDGE_MODEL:-}"
+MODEL=""
 THREAD="${AGENT_BRIDGE_THREAD:-main}"
 # THREAD_SET is set by the --thread flag ONLY: it scopes `<peer> reset` down to one thread,
 # and an *inherited* AGENT_BRIDGE_THREAD must never silently change what a reset deletes —

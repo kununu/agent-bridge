@@ -6,7 +6,7 @@
   and passes `max` through unchanged — so Claude is your peer for genuinely hard, max-effort work.
 - **Model:** the bridge's tiers map to stable CLI aliases — `fast`→`sonnet`, `standard`→`opus`,
   `max`→`fable` — which always track the latest version of each. No `--model` → the user's own
-  Claude CLI default (or `AGENT_BRIDGE_MODEL`, if set).
+  Claude CLI default.
 - **Heartbeats:** at high effort Claude reasons for one to a few minutes before and between
   actions, emitting `· thinking… ~Nk tokens` heartbeats. A climbing count means it's alive
   and working — don't kill it mid-think. Worry only if the stream goes fully silent (no new

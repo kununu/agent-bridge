@@ -86,8 +86,7 @@ expected, and shown in the run header).
 ## Model
 
 By default the bridge sends **no model flag** — the peer runs on whatever its own CLI is
-configured to use (or on `AGENT_BRIDGE_MODEL`, if the user exported one to pin a bridge-wide
-default). To pick a capability tier instead, pass `--model`:
+configured to use. To pick a capability tier instead, pass `--model`:
 
 ```
 bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --model <tier> "your task"

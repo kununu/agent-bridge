@@ -12,8 +12,7 @@
   `fast`→`gpt-5.6-luna`, `standard`→`gpt-5.6-terra`, `max`→`gpt-5.6-sol`. Luna is no toy:
   it out-scores Terra on Terminal-Bench, so `fast` is a solid coding tier. These are
   versioned IDs — bump the `model_map` in `adapters/codex.json` when a new generation
-  ships. No `--model` → the user's `~/.codex/config.toml` default (or `AGENT_BRIDGE_MODEL`,
-  if set). Switching model
+  ships. No `--model` → the user's `~/.codex/config.toml` default. Switching model
   mid-session (on resume) works but Codex warns it may hurt performance — pick the tier
   when a thread starts, or reset first.
 - **Resume:** sessions resume by `thread_id`; the bridge persists it for you per thread
