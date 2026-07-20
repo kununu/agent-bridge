@@ -78,6 +78,7 @@ Usage:
   bash bridge.sh agents                        list peer agents you can call (everyone but you)
   bash bridge.sh <peer> "task"                 delegate to <peer>, streamed live
   bash bridge.sh <peer> --effort <lvl> "task"  set reasoning effort, then delegate
+  bash bridge.sh <peer> --model <model> "task" pick the peer's model, then delegate
   bash bridge.sh <peer> --thread <label> "task"  delegate on a separate thread (own peer session)
   bash bridge.sh <peer> reset                  clear this chat's sessions with <peer> (all threads)
   bash bridge.sh <peer> reset --thread <label> clear just that thread with <peer>
@@ -87,6 +88,12 @@ Usage:
 
 Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
 Each peer maps these onto its own scale; the run header shows the level actually applied.
+
+Models (for --model): 'top' = the peer's strongest coding model; short names (sol, luna, …)
+resolve via the peer's model_map; any other value is passed to the peer CLI verbatim, so
+brand-new models work before the map knows them. An explicit --model persists per thread:
+follow-ups reuse it until you pass a different one (reset clears it). Omitted on a fresh
+thread: no model flag is sent and the peer CLI's own configured default applies.
 
 Threads (for --thread): each label keeps its own peer session under this chat (default: main).
 Use one label per parallel helper so concurrent delegations don't share a session. Labels
@@ -103,15 +110,19 @@ Env overrides:
 EOF
 }
 
-# --- optional reasoning effort + thread ----------------------------------------------
+# --- optional reasoning effort + model + thread ---------------------------------------
 # Peers run at a reasoning/thinking level (default high). The calling agent maps the user's
 # words ("think hard", "quick and rough") to a canonical level; each adapter then maps that
-# to its own term (Claude's --effort, Codex's model_reasoning_effort). Pull `--effort <level>`
-# and `--thread <label>` out here so the rest stays positional — agents / reset / "<task>"
-# are untouched. A thread is an independent lane to a peer within this chat: parallel helper
-# subagents inherit the primary's chat id, so without distinct labels they'd share (and
-# clobber) one peer session.
+# to its own term (Claude's --effort, Codex's model_reasoning_effort). Model is mapped the
+# same way ('top' or a short name → the peer's model ID) but has NO default: when unset the
+# bridge sends no model flag and the peer CLI's own default applies — unless this thread
+# already stored an explicit choice (see MODEL_FILE below). Pull `--effort <level>`,
+# `--model <model>` and `--thread <label>` out here so the rest stays positional — agents /
+# reset / "<task>" are untouched. A thread is an independent lane to a peer within this
+# chat: parallel helper subagents inherit the primary's chat id, so without distinct labels
+# they'd share (and clobber) one peer session.
 EFFORT="${AGENT_BRIDGE_EFFORT:-high}"
+MODEL=""
 THREAD="${AGENT_BRIDGE_THREAD:-main}"
 # THREAD_SET is set by the --thread flag ONLY: it scopes `<peer> reset` down to one thread,
 # and an *inherited* AGENT_BRIDGE_THREAD must never silently change what a reset deletes —
@@ -121,11 +132,21 @@ PASS_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)  usage; exit 0 ;;
+    # Separated values must not look like flags: a missing value would otherwise swallow
+    # the next option and silently run the wrong task ('--model --thread review "task"'
+    # would run model '--thread' on thread 'main' with prompt 'review'). The '=' forms
+    # remain a parse-level escape hatch — the bridge passes a dash-leading value through,
+    # though the peer CLI's own parser may still reject it.
     --effort)   shift; EFFORT="${1:-}"
+                case "$EFFORT" in ''|-*) echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1;; esac ;;
+    --effort=*) EFFORT="${1#--effort=}"
                 [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
-    --effort=*) EFFORT="${1#--effort=}" ;;
+    --model)    shift; MODEL="${1:-}"
+                case "$MODEL" in ''|-*) echo "agent-bridge: --model needs 'top' or a model name" >&2; exit 1;; esac ;;
+    --model=*)  MODEL="${1#--model=}"
+                [ -z "$MODEL" ] && { echo "agent-bridge: --model needs 'top' or a model name" >&2; exit 1; } ;;
     --thread)   shift; THREAD="${1:-}"; THREAD_SET=1
-                [ -z "$THREAD" ] && { echo "agent-bridge: --thread needs a label" >&2; exit 1; } ;;
+                case "$THREAD" in ''|-*) echo "agent-bridge: --thread needs a label" >&2; exit 1;; esac ;;
     --thread=*) THREAD="${1#--thread=}"; THREAD_SET=1 ;;
     --)         shift; PASS_ARGS+=("$@"); break ;;   # everything after -- is positional (prompt may look like a flag)
     *)          PASS_ARGS+=("$1") ;;
@@ -291,6 +312,7 @@ export AGENT_BRIDGE_INVOKED_BY="$SELF"
 THREAD_DIR="$CHAT_DIR/$TARGET/$THREAD"
 mkdir -p "$THREAD_DIR/logs"
 SESSION_FILE="$THREAD_DIR/session"
+MODEL_FILE="$THREAD_DIR/model"
 # PID suffix: within one thread runs are serialized by the lock, but a same-second run
 # right after a crash-steal could otherwise reuse the previous run's filename.
 LOG="$THREAD_DIR/logs/$TARGET-$(date +%Y%m%d-%H%M%S)-$$.jsonl"
@@ -315,9 +337,21 @@ if [ -f "$SESSION_FILE" ]; then
   MODE="resume"; SID="$(cat "$SESSION_FILE")"
 fi
 
+# An explicit --model sticks to the thread (stored resolved — 'gpt-5.6-sol', not 'top' —
+# after a successful run, below): model-less follow-ups reuse it instead of silently
+# falling back to the CLI default mid-session. A different explicit model switches the
+# thread — allowed, shown in the header, re-stored on success.
+MODEL_EXPLICIT="$MODEL"
+STORED_MODEL=""
+[ -f "$MODEL_FILE" ] && STORED_MODEL="$(cat "$MODEL_FILE")"
+# An inherited model is ALREADY resolved — it must bypass model_map, or a future map entry
+# matching a stored ID would silently remap a pinned thread (MODEL_RESOLVED tells adapter.py).
+MODEL_RESOLVED=""
+[ -z "$MODEL" ] && [ -n "$STORED_MODEL" ] && { MODEL="$STORED_MODEL"; MODEL_RESOLVED=1; }
+
 # Build argv + read adapter fields (BIN, STREAM_FORMAT, SID_KEY, ARGS) in one shot. The
 # helper shlex-quotes everything, so the eval is safe even with a hostile prompt/sid.
-ADAPTER_SH="$(python3 "$SCRIPT_DIR/adapter.py" "$ADAPTER_FILE" "$MODE" "$PROMPT" "$SID" "$EFFORT")" || {
+ADAPTER_SH="$(python3 "$SCRIPT_DIR/adapter.py" "$ADAPTER_FILE" "$MODE" "$PROMPT" "$SID" "$EFFORT" "$MODEL" "$MODEL_RESOLVED")" || {
   echo "agent-bridge: failed to read adapter '$TARGET' ($ADAPTER_FILE)." >&2
   exit 1
 }
@@ -344,9 +378,24 @@ if [ -z "$BIN_PATH" ]; then
 fi
 
 # Show the requested level; add the peer's mapped term when it differs (e.g. Codex caps max→high).
+# Braces before the arrow are load-bearing: without them bash 3.2 under a Latin-1-ish locale
+# lexes the first byte of '→' (0xE2, a letter there) into the variable name and expands the
+# whole thing to empty.
 EFFORT_DISP="$EFFORT"
-[ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="$EFFORT→$PEER_EFFORT"
-echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
+[ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="${EFFORT}→${PEER_EFFORT}"
+# Model: keyed on PEER_MODEL — the model the peer actually receives — so a requested-but-
+# ignored model (adapter without model support) never shows up as applied. Plain when
+# inherited, 'top→gpt-5.6-sol' when the mapping changed the request, spelled out on a switch.
+MODEL_DISP=""
+if [ -n "${PEER_MODEL:-}" ]; then
+  MODEL_DISP=" · model ${PEER_MODEL}"
+  if [ -n "$MODEL_EXPLICIT" ] && [ -n "$STORED_MODEL" ] && [ "$PEER_MODEL" != "$STORED_MODEL" ]; then
+    MODEL_DISP=" · switching model ${STORED_MODEL}→${PEER_MODEL}"
+  elif [ "$PEER_MODEL" != "$MODEL" ]; then
+    MODEL_DISP=" · model ${MODEL}→${PEER_MODEL}"
+  fi
+fi
+echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP$MODEL_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
 
 # Run the peer's full harness, streamed live:
 #   stdout -> log (pure JSONL: source of truth + where we read the session id back)
@@ -371,6 +420,9 @@ fi
 
 # Persist the peer's session id even if it errored partway: it's emitted early in the
 # stream, so a partial log still carries it. The next call resumes the work-in-progress.
+# Init first: the model-persist check below reads NEWSID as "the peer emitted a session id
+# THIS run" — for a sid-key-less adapter it would otherwise leak in from the environment.
+NEWSID=""
 if [ -n "$SID_KEY" ]; then
   # `|| true`: an empty/sid-less log makes grep exit 1, which pipefail+set -e would turn into
   # a spurious script failure that masks the peer's real exit status. Tolerate "no match".
@@ -380,6 +432,19 @@ if [ -n "$SID_KEY" ]; then
     printf '%s\n' "$NEWSID" > "$SESSION_FILE.tmp.$$"
     mv -f "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
   fi
+fi
+
+# Persist an explicit model choice once the peer actually ran with it: a clean exit, or a
+# failed run that still emitted a session id — that session may have recorded partial work
+# with the new model, so the stored model must follow it or the next model-less follow-up
+# would silently switch back. Deliberate trade-off: a peer can emit its session id BEFORE
+# the API rejects a bogus model (codex does), storing the bad name — but that fails loudly
+# on the next call and heals via an explicit switch or reset, whereas not storing after
+# partial work corrupts silently. Loud beats silent.
+if [ -n "$MODEL_EXPLICIT" ] && [ -n "${PEER_MODEL:-}" ] && [ "$PEER_MODEL" != "$STORED_MODEL" ] \
+   && { [ "$status" -eq 0 ] || [ -n "${NEWSID:-}" ]; }; then
+  printf '%s\n' "$PEER_MODEL" > "$MODEL_FILE.tmp.$$"
+  mv -f "$MODEL_FILE.tmp.$$" "$MODEL_FILE"
 fi
 
 exit "$status"
