@@ -431,10 +431,12 @@ if [ -n "$SID_KEY" ]; then
 fi
 
 # Persist an explicit model choice once the peer actually ran with it: a clean exit, or a
-# failed run that still emitted a session id — that session is now recorded with the new
-# model (and saved above), so the stored model must follow it or the next model-less
-# follow-up would silently switch back. A model the CLI rejects outright emits no session
-# id and exits non-zero: the old stored model stays.
+# failed run that still emitted a session id — that session may have recorded partial work
+# with the new model, so the stored model must follow it or the next model-less follow-up
+# would silently switch back. Deliberate trade-off: a peer can emit its session id BEFORE
+# the API rejects a bogus model (codex does), storing the bad name — but that fails loudly
+# on the next call and heals via an explicit switch or reset, whereas not storing after
+# partial work corrupts silently. Loud beats silent.
 if [ -n "$MODEL_EXPLICIT" ] && [ -n "${PEER_MODEL:-}" ] && [ "$PEER_MODEL" != "$STORED_MODEL" ] \
    && { [ "$status" -eq 0 ] || [ -n "${NEWSID:-}" ]; }; then
   printf '%s\n' "$PEER_MODEL" > "$MODEL_FILE.tmp.$$"
