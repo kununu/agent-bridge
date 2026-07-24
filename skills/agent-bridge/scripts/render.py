@@ -4,6 +4,7 @@
 One renderer, several peer formats — pick with `--format`:
   * claude-stream-json : Claude Code's `--output-format stream-json`
   * codex-jsonl        : Codex's `exec --json` event stream
+  * agy-stream-json    : Antigravity CLI's `--print --output-format stream-json` events
   * raw                : passthrough (one line per event), the safe fallback
 
 Robust by design: anything a renderer doesn't recognize is skipped (or, in raw mode,
@@ -214,6 +215,77 @@ def render_codex():
     show(last_msg)
 
 
+# ------------------------------------------------------------------------------ agy
+def render_agy():
+    """Antigravity CLI (agy) `--print --output-format stream-json` NDJSON stream.
+
+    Events: `init` (conversation_id — the resumable sid), `step_update` (one per
+    conversation step: agent_response carrying incremental `text_delta` chunks, tool
+    with `tool_info`, plus user_input/checkpoint/unknown bookkeeping), and a final
+    `result` that repeats the final agent text. So agent_response text is accumulated
+    per step and the completed message held back, codex-style: intermediate narration
+    flushes when a later step supersedes it, and the final answer prints once, after
+    the done-marker, from `result`.
+    """
+    pending = None   # newest completed agent_response, deferred so the final isn't doubled
+    buf = ""         # text_delta accumulator for the agent_response step in progress
+    last_msg = ""
+
+    def flush_pending():
+        nonlocal pending
+        if pending is not None:
+            show(pending)
+            pending = None
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+
+        ev = e.get("event")
+
+        if ev == "init":
+            show(f"\n── agy conversation {e.get('conversation_id', '?')} ──")
+
+        elif ev == "step_update":
+            su = e.get("step_update", {})
+            stype, state = su.get("step_type"), su.get("state")
+            if stype == "agent_response":
+                buf += su.get("text_delta") or ""
+                if state == "DONE":
+                    txt = buf.strip()
+                    buf = ""
+                    if txt:
+                        flush_pending()
+                        pending = txt
+                        last_msg = txt
+            elif stype == "tool":
+                info = su.get("tool_info") or {}
+                name = su.get("tool_name") or info.get("name", "tool")
+                if state == "ACTIVE":
+                    flush_pending()
+                    show(f"  · tool: {name} {trim(json.dumps(info.get('parameters', {}), ensure_ascii=False))}")
+                elif state == "ERROR":
+                    flush_pending()
+                    show(f"  · tool {name} failed")
+
+        elif ev == "result":
+            r = e.get("result", {})
+            status = r.get("status", "")
+            resp = (r.get("response") or "").rstrip()
+            pending = None   # the held text is what `result` repeats — drop it, don't flush
+            if status and status != "SUCCESS":
+                show(f"  · result: {status}")
+                if not resp:   # don't promote stale narration to "final answer" on failure
+                    resp = f"(agy run ended with status {status})"
+            show("\n── agy done ──")
+            show(resp or last_msg)
+
+
 # ------------------------------------------------------------------------------ raw
 def render_raw():
     for line in sys.stdin:
@@ -225,6 +297,7 @@ def render_raw():
 _RENDERERS = {
     "claude-stream-json": render_claude,
     "codex-jsonl": render_codex,
+    "agy-stream-json": render_agy,
     "raw": render_raw,
 }
 

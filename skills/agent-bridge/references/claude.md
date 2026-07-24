@@ -14,5 +14,4 @@
 - **Resume:** sessions resume by `session_id`; the bridge persists it for you per thread
   (`main` unless you pass `--thread`), so follow-ups in the same chat and thread continue
   the same Claude session automatically.
-- **Good for:** large self-contained implementation, careful multi-file refactors, and
-  thorough correctness/edge-case reviews.
+- **Good for:** large self-contained implementation, front-end & tasteful work, planning and solving complex problems, and thorough correctness/edge-case reviews.
