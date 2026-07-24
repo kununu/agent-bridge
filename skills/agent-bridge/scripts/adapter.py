@@ -10,7 +10,7 @@ session id can't break out of the eval):
     BIN=<peer cli name>
     STREAM_FORMAT=<format passed to render.py>
     SID_KEY=<json key carrying the resumable session id>
-    ARGS=( ...argv for the chosen mode, with {prompt}/{sid}/{effort}/{model} substituted... )
+    ARGS=( ...argv for the chosen mode, with {prompt}/{sid}/{effort}/{model}/{cwd} substituted... )
 
 Keeping argv construction here (rather than in bash) lets each peer express its own
 shape — e.g. Codex puts `resume <sid>` positionally before the prompt, while Claude
@@ -28,6 +28,7 @@ resolved) choice: it skips `model_map`, so a map entry that happens to match a s
 can never silently remap a pinned thread.
 """
 import sys
+import os
 import json
 import re
 import shlex
@@ -107,8 +108,11 @@ def main():
     # Single-pass substitution: replacement values are never rescanned for placeholders,
     # so a prompt containing '{sid}' — or a hostile model name like '{prompt}' — stays literal
     # (chained .replace() calls would re-expand tokens inside earlier substitutions).
-    subs = {"{sid}": sid, "{effort}": peer_effort, "{model}": peer_model, "{prompt}": prompt}
-    args = [re.sub(r"\{(?:sid|effort|model|prompt)\}", lambda m: subs[m.group(0)], a) for a in args]
+    # {cwd} is for peers that don't anchor on the invocation directory by themselves
+    # (agy's print mode starts with no workspace and would work in its own scratch dir).
+    subs = {"{sid}": sid, "{effort}": peer_effort, "{model}": peer_model,
+            "{prompt}": prompt, "{cwd}": os.getcwd()}
+    args = [re.sub(r"\{(?:sid|effort|model|prompt|cwd)\}", lambda m: subs[m.group(0)], a) for a in args]
 
     out = [
         f"BIN={shlex.quote(str(adapter.get('bin', '')))}",

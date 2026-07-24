@@ -16,5 +16,4 @@
   (`main` unless you pass `--thread`), so same-chat, same-thread follow-ups continue it.
 - **Reasoning text** only appears when reasoning summaries are enabled; by default you'll
   see its actions and the final answer (the last `agent_message`).
-- **Good for:** a fast independent second opinion, focused implementation, and red-teaming
-  another agent's output.
+- **Good for:** coding & solving complex problems, a fast independent second opinion, focused implementation, computer use, reviewing another agent's output.

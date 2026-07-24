@@ -398,7 +398,7 @@ fi
 echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREAD · effort $EFFORT_DISP$MODEL_DISP · $([ "$MODE" = resume ] && echo 'resuming session' || echo 'new session')$([ "$DEPTH" -gt 1 ] && echo " · chain $CHAIN")"
 
 # Run the peer's full harness, streamed live:
-#   stdout -> log (pure JSONL: source of truth + where we read the session id back)
+#   stdout -> log (the peer's raw stream: source of truth + where we read the session id back)
 #          -> render (readable live view of the reasoning, not just the final line)
 #   stderr -> sidecar file, kept out of the live view (it's mostly chatter like codex's
 #             "reading additional input from stdin"); surfaced below only if the peer fails.
@@ -427,11 +427,15 @@ if [ -n "$SID_KEY" ]; then
   # `|| true`: an empty/sid-less log makes grep exit 1, which pipefail+set -e would turn into
   # a spurious script failure that masks the peer's real exit status. Tolerate "no match".
   NEWSID="$(grep -o "\"$SID_KEY\":\"[^\"]*\"" "$LOG" | tail -n1 | sed "s/.*\"$SID_KEY\":\"\([^\"]*\)\".*/\1/" || true)"
-  # Write-then-rename so a reader never sees a torn/empty session file.
-  if [ -n "$NEWSID" ]; then
-    printf '%s\n' "$NEWSID" > "$SESSION_FILE.tmp.$$"
-    mv -f "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
-  fi
+fi
+# Write-then-rename so a reader never sees a torn/empty session file.
+if [ -n "$NEWSID" ]; then
+  printf '%s\n' "$NEWSID" > "$SESSION_FILE.tmp.$$"
+  mv -f "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+elif [ "$MODE" = "new" ] && [ "$status" -eq 0 ] && [ -n "$SID_KEY" ]; then
+  # This peer resumes by an id we must read back from its stream (some, like agy, ignore
+  # ids we invent) — a clean run without one means follow-ups will silently start fresh.
+  echo "agent-bridge: warning — no session id found in $TARGET's stream; the next call can't resume this session." >&2
 fi
 
 # Persist an explicit model choice once the peer actually ran with it: a clean exit, or a

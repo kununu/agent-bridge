@@ -8,7 +8,7 @@ It's **one [agent-skill](https://agentskills.io)** installed into every agent yo
 
 ## Requirements
 
-- **The peer's CLI**, installed and logged in (e.g. `claude`, `codex`) — the bridge runs the agent you delegate *to* through its real CLI. The agent you *drive* needs no CLI of its own; it can be any app that loads the skill (a terminal CLI **or** a desktop/IDE app).
+- **The peer's CLI**, installed and logged in (e.g. `claude`, `codex`, `agy`(gemini)) — the bridge runs the agent you delegate *to* through its real CLI. The agent you *drive* needs no CLI of its own; it can be any app that loads the skill (a terminal CLI **or** a desktop/IDE app).
 - **`python3`** on PATH — the bridge's scripts use it.
 - **Node / `npx`** — only to install the skill (below).
 
@@ -28,6 +28,7 @@ npx skills add kununu/agent-bridge -g -a claude-code codex # -g installs into al
 skills/agent-bridge/
 ├── SKILL.md          # when to delegate + how to brief a peer (the host agent reads this)
 ├── references/       # per-peer notes, loaded on demand when you target that peer
+│   ├── agy.md
 │   ├── claude.md
 │   └── codex.md
 └── scripts/
@@ -36,11 +37,12 @@ skills/agent-bridge/
     ├── adapter.py    # read a peer adapter → build its argv
     ├── meta.py       # write a self-describing meta.json per chat in the session store
     └── adapters/     # one small JSON per peer — adding an agent = dropping a file here
+        ├── agy.json
         ├── claude.json
         └── codex.json
 ```
 
-**The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format, how it names its reasoning levels (`effort_map`) and models (`model_map`) — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file, not a code change** — that's what keeps an N×N problem linear.
+**The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format, how it names its reasoning levels (`effort_map`) and models (`model_map`) — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file** — plus a small renderer in `render.py` if the peer speaks a stream format the bridge hasn't seen yet — and that's what keeps an N×N problem linear.
 
 Delegations take canonical knobs the adapters translate per peer: `--effort low…max` (reasoning depth, default `high`) and `--model` (`top` = the peer's strongest coding model, or a model's short name like `sonnet` / `luna`). `--model` has **no default** — omitted on a fresh thread, the bridge sends no model flag and the peer CLI's own configured model applies; unknown values pass through verbatim, so new model names work before any map is updated. An explicit model **sticks to its thread**: model-less follow-ups reuse it instead of falling back to the CLI default, until you pass a different one or reset.
 

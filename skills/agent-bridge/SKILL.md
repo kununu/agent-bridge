@@ -1,8 +1,8 @@
 ---
 name: agent-bridge
 description: >-
-  Delegate real coding work to a peer AI agent (such as Claude Code or Codex) that runs its
-  own full harness, or use that peer as an independent reviewer or adversarial red-team.
+  Delegate real coding work to a peer AI agent (such as Claude Code, Codex (ChatGPT), or Gemini (Antigravity)) that runs its
+  own full harness, or use that peer as an independent reviewer, adversarial red-team, ideation & planning partner.
   Trigger when the user says "use agent bridge", "ask <another agent>", "delegate to
   <agent>", "have <agent> implement/build/fix this", "get <agent> to review/critique",
   "get a second opinion", or otherwise hands work to a different agent than the one they're
@@ -10,7 +10,7 @@ description: >-
   the same instructions work whichever agent you are running inside. Do NOT trigger for
   normal work the user wants you to do yourself.
 compatibility: >-
-  Requires python3 and the peer agent's CLI (e.g. claude, codex) installed and logged in.
+  Requires python3 and the peer agent's CLI (e.g. claude, codex, agy) installed and logged in.
 ---
 
 # agent-bridge — delegate to a peer coding agent
@@ -31,6 +31,9 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" agents
 
 Lists the peers available on this machine (everyone except you). Pick one as `<peer>` in the
 commands below. For a specific peer's quirks, read `references/<peer>.md` in this skill.
+
+Naming exception to keep in mind: **"Gemini" means peer `agy`** — Google renamed the Gemini
+CLI's successor to the Antigravity CLI, so *"ask Gemini"* (or *"Antigravity"*) targets `agy`.
 
 ## How to delegate
 
