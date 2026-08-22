@@ -4,7 +4,7 @@ Have **any AI coding agent drive another as a peer** — to implement, review, o
 
 Talk to whichever agent you prefer (Claude Code, Codex, …). When you say *"ask Codex to implement this"* or *"have Claude review this diff"*, the bridge briefs the peer, runs it on your own subscription via the peer's **real CLI** (so it keeps its full toolset), streams the work back live, then verifies it and reports. You watch and steer between rounds — you're never the messenger.
 
-It's **one [agent-skill](https://agentskills.io)** installed into every agent you use. The skill is generic: it auto-detects which agent it's running inside and offers the others as peers — so the *same* skill makes the bridge a two-way (and N-way) street.
+The bridge is **one [agent-skill](https://agentskills.io)** installed into every agent you use. The skill is generic: it auto-detects which agent it's running inside and offers the others as peers — so the *same* skill makes the bridge a two-way (and N-way) street.
 
 ## Requirements
 
@@ -19,7 +19,7 @@ It's **one [agent-skill](https://agentskills.io)** installed into every agent yo
 With the [`skills`](https://skills.sh) CLI, install/update the skill into each agent you want bridged:
 
 ```
-npx skills add kununu/agent-bridge -g -a claude-code codex # -g installs into all projects;
+npx skills add kununu/agent-bridge -g -a claude-code codex -s '*' # -g installs into all projects; -s '*' takes both skills
 ```
 
 ## Structure
@@ -40,6 +40,12 @@ skills/agent-bridge/
         ├── agy.json
         ├── claude.json
         └── codex.json
+
+skills/bridge-review/    # user-invoked: /bridge-review <peer> — send the current changes to a peer, verify what comes back
+├── SKILL.md
+├── agents/openai.yaml   # Codex picker metadata (user-invoked)
+└── references/          # per-peer trust notes, loaded on demand
+    └── gemini.md
 ```
 
 **The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format, how it names its reasoning levels (`effort_map`) and models (`model_map`) — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file** — plus a small renderer in `render.py` if the peer speaks a stream format the bridge hasn't seen yet — and that's what keeps an N×N problem linear.

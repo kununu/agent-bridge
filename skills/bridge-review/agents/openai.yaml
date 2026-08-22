@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bridge review"
+  short_description: "A peer agent reviews the current changes; verified findings get fixed"
+policy:
+  allow_implicit_invocation: false
