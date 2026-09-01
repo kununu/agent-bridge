@@ -29,7 +29,9 @@ def fmt_tok(n):
     return f"~{n / 1000:.1f}k tokens" if n >= 1000 else f"~{n} tokens"
 
 
-def trim(s, n=220):
+# 700 fits every real tool call whole (image-gen prompts, the longest observed, run ~560)
+# while still bounding huge args like file-write payloads; the full stream is in logs/.
+def trim(s, n=700):
     s = " ".join(str(s).split())
     return s if len(s) <= n else s[:n] + " ..."
 
@@ -269,9 +271,19 @@ def render_agy():
                 if state == "ACTIVE":
                     flush_pending()
                     show(f"  · tool: {name} {trim(json.dumps(info.get('parameters', {}), ensure_ascii=False))}")
-                elif state == "ERROR":
+                elif state in ("DONE", "ERROR"):
+                    # Without completion lines a run of slow tools (image gens take ~30s
+                    # each) looks identical to a hung one: calls go out, nothing comes back.
                     flush_pending()
-                    show(f"  · tool {name} failed")
+                    bits = []
+                    dur = su.get("duration_seconds")
+                    if isinstance(dur, (int, float)):
+                        bits.append(f"{dur:.1f}s")
+                    out = info.get("output")
+                    if out not in (None, ""):
+                        bits.append(trim(out))
+                    tag = "failed" if state == "ERROR" else "done"
+                    show(f"    ↳ {name} {tag}{' · ' + ' · '.join(bits) if bits else ''}")
 
         elif ev == "result":
             r = e.get("result", {})

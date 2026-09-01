@@ -18,6 +18,7 @@
 # Usage:
 #   bash bridge.sh agents                    # list peer agents you can call (everyone but you)
 #   bash bridge.sh <peer> "task"             # delegate to <peer>, stream it live
+#   bash bridge.sh <peer> --task-file F      # same, task read from a file ('-' = stdin)
 #   bash bridge.sh <peer> --thread L "task"  # same, on a separate thread (own peer session)
 #   bash bridge.sh <peer> reset              # clear this chat's sessions with <peer> (all threads)
 #   bash bridge.sh <peer> reset --thread L   # clear just thread L with <peer>
@@ -77,6 +78,7 @@ agent-bridge — delegate a task to a peer coding agent from whatever agent you'
 Usage:
   bash bridge.sh agents                        list peer agents you can call (everyone but you)
   bash bridge.sh <peer> "task"                 delegate to <peer>, streamed live
+  bash bridge.sh <peer> --task-file <path>     same, but read the task from a file ('-' = stdin)
   bash bridge.sh <peer> --effort <lvl> "task"  set reasoning effort, then delegate
   bash bridge.sh <peer> --model <model> "task" pick the peer's model, then delegate
   bash bridge.sh <peer> --thread <label> "task"  delegate on a separate thread (own peer session)
@@ -85,6 +87,11 @@ Usage:
   bash bridge.sh reset                         clear this chat's sessions with all peers
   bash bridge.sh reset --all                   clear ALL of this project's bridge state
   bash bridge.sh -h | --help                   print this help and exit
+
+Task text (--task-file): read the task from a file instead of an argv. Use it whenever the
+task contains $, backticks or quotes — an argv goes through your shell first, so a literal
+'$12B' in a prompt silently becomes '2B' unless you escape it. '-' reads stdin. It solves
+mangling, not size: the task still travels as argv to the peer, capped at ~120KB.
 
 Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
 Each peer maps these onto its own scale; the run header shows the level actually applied.
@@ -128,6 +135,7 @@ THREAD="${AGENT_BRIDGE_THREAD:-main}"
 # and an *inherited* AGENT_BRIDGE_THREAD must never silently change what a reset deletes —
 # the env var picks your delegation lane, the flag states reset intent.
 THREAD_SET=""
+TASK_FILE=""
 PASS_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -145,6 +153,12 @@ while [ $# -gt 0 ]; do
                 case "$MODEL" in ''|-*) echo "agent-bridge: --model needs 'top' or a model name" >&2; exit 1;; esac ;;
     --model=*)  MODEL="${1#--model=}"
                 [ -z "$MODEL" ] && { echo "agent-bridge: --model needs 'top' or a model name" >&2; exit 1; } ;;
+    # A bare '-' means stdin and is the one legal dash-leading value; anything else
+    # dash-leading is a swallowed option (see the note above), not a path.
+    --task-file)   shift; TASK_FILE="${1:-}"
+                case "$TASK_FILE" in ''|-?*) echo "agent-bridge: --task-file needs a path ('-' for stdin)" >&2; exit 1;; esac ;;
+    --task-file=*) TASK_FILE="${1#--task-file=}"
+                [ -z "$TASK_FILE" ] && { echo "agent-bridge: --task-file needs a path ('-' for stdin)" >&2; exit 1; } ;;
     --thread)   shift; THREAD="${1:-}"; THREAD_SET=1
                 case "$THREAD" in ''|-*) echo "agent-bridge: --thread needs a label" >&2; exit 1;; esac ;;
     --thread=*) THREAD="${1#--thread=}"; THREAD_SET=1 ;;
@@ -288,8 +302,33 @@ if [ "${2:-}" = "reset" ]; then
 fi
 
 PROMPT="${2:-}"
+if [ -n "$TASK_FILE" ]; then
+  if [ -n "$PROMPT" ]; then
+    echo "agent-bridge: pass the task as --task-file OR as an argument, not both." >&2
+    exit 1
+  fi
+  if [ "$TASK_FILE" = "-" ]; then
+    PROMPT="$(cat)"   # stdin is free to consume: the peer itself runs with </dev/null
+  elif [ -f "$TASK_FILE" ]; then
+    PROMPT="$(cat "$TASK_FILE")"
+  else
+    echo "agent-bridge: --task-file '$TASK_FILE' not found." >&2
+    exit 1
+  fi
+  if [ -z "$PROMPT" ]; then
+    echo "agent-bridge: --task-file '$TASK_FILE' is empty — nothing to delegate." >&2
+    exit 1
+  fi
+fi
 if [ -z "$PROMPT" ]; then
-  echo "usage: bash bridge.sh $TARGET \"task for $TARGET\"" >&2
+  echo "usage: bash bridge.sh $TARGET \"task for $TARGET\"   (or: --task-file <path>)" >&2
+  exit 1
+fi
+# --task-file solves mangling, not size: the task still travels as a single argv (to
+# adapter.py, meta.py, and the peer CLI), and ARG_MAX bounds that (~128KB/arg on Linux).
+# Refuse here with the real cause rather than let the peer's exec die with a bare E2BIG.
+if [ "$(printf %s "$PROMPT" | wc -c | tr -d ' ')" -gt 120000 ]; then
+  echo "agent-bridge: task is over 120KB — it travels as one argv to the peer CLI, which caps out near 128KB. Trim the brief, or have the peer read the file itself." >&2
   exit 1
 fi
 
@@ -404,6 +443,13 @@ echo "▶ agent-bridge · $SELF → $TARGET · chat ${CHAT:0:8} · thread $THREA
 #             "reading additional input from stdin"); surfaced below only if the peer fails.
 # stdin <- /dev/null: the task is passed as an argv, and some peers (e.g. codex exec) will
 # otherwise block "reading additional input from stdin" when launched from a pipe.
+# Marks the moment the peer started, so the artifacts scan below can tell files this run
+# created from ones already sitting in the peer's output dir. $LOG can't serve: tee keeps
+# writing to it, so its mtime is the END of the run and every artifact looks older.
+STAMP="$THREAD_DIR/.runstamp.$$"
+: > "$STAMP"
+trap 'rm -f "$LOCK" "$STAMP"' EXIT
+
 set +e
 "$BIN_PATH" "${ARGS[@]}" < /dev/null 2>"$ERRLOG" \
   | tee "$LOG" \
@@ -449,6 +495,28 @@ if [ -n "$MODEL_EXPLICIT" ] && [ -n "${PEER_MODEL:-}" ] && [ "$PEER_MODEL" != "$
    && { [ "$status" -eq 0 ] || [ -n "${NEWSID:-}" ]; }; then
   printf '%s\n' "$PEER_MODEL" > "$MODEL_FILE.tmp.$$"
   mv -f "$MODEL_FILE.tmp.$$" "$MODEL_FILE"
+fi
+
+# --- files the peer dropped outside the repo -------------------------------------------
+# Some peers write output into a private per-session directory and say nothing about it in
+# the stream (agy's generated images land in its brain dir). When the adapter declares where
+# that is, list what this run put there. Reporting only: moving files is the caller's call.
+EFFECTIVE_SID="${NEWSID:-$SID}"
+if [ -n "${ARTIFACTS_DIR:-}" ] && [ -n "$EFFECTIVE_SID" ]; then
+  ART="${ARTIFACTS_DIR//\{sid\}/$EFFECTIVE_SID}"
+  ART="${ART/#\~/$HOME}"
+  if [ -d "$ART" ]; then
+    NEW_FILES="$(find "$ART" -maxdepth 1 -type f -newer "$STAMP" 2>/dev/null | sort || true)"
+    if [ -n "$NEW_FILES" ]; then
+      N="$(printf '%s\n' "$NEW_FILES" | wc -l | tr -d ' ')"
+      echo ""
+      echo "── $TARGET artifacts · $N file(s) written outside the repo ──"
+      # sed, not head: head exits at line 20 and a big list then kills printf with
+      # SIGPIPE, which pipefail turns into exit 141 masking the peer's real status.
+      printf '%s\n' "$NEW_FILES" | sed -n '1,20s/^/  /p'
+      if [ "$N" -gt 20 ]; then echo "  … and $((N - 20)) more in $ART"; fi
+    fi
+  fi
 fi
 
 exit "$status"

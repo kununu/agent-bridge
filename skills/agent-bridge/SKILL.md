@@ -51,6 +51,16 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> "your task for
 - If the peer gets confused, or the user asks to start fresh, reset and retry — see
   **Starting a peer over** below.
 
+**Long tasks, or any task containing `$`, backticks or quotes: write it to a file and pass
+`--task-file` instead of an argv.** The argv goes through your shell first, so a literal
+`$12B` in a prompt becomes `2B` and the peer works from a corrupted brief. `-`
+reads stdin. It solves mangling, not size — past ~120KB the bridge refuses (the task still
+travels as argv to the peer); tell the peer to read the file itself instead.
+
+```
+bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --task-file brief.md
+```
+
 Read **Gotchas** below before your first run — most "it looks stuck" moments are the peer thinking.
 
 ## Gotchas
@@ -62,6 +72,11 @@ Read **Gotchas** below before your first run — most "it looks stuck" moments a
   step in only if the stream goes fully silent for a long stretch.
 - **The peer's final answer comes after the `── <peer> done ──` marker.** Everything before it
   is live reasoning and actions; read the stream, but treat the post-marker text as the answer.
+  One thing can follow the answer: an `── <peer> artifacts ──` list, when the peer wrote files
+  into its own private session directory instead of the repo (agy's generated images do this).
+  Those paths are real files — copy what you want to keep into the project.
+- **A peer's report on its own output is a claim, not a result.** Verify with your own tools
+  before relaying it; peers do state that every constraint was met when it wasn't.
 - **Sessions persist per conversation, per peer, per thread.** A new chat starts a fresh peer
   session; within this chat, every call to the same peer (on the same thread — `main` unless
   you name one) continues the same one. Write follow-ups as continuations ("the parser you

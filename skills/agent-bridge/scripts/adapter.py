@@ -10,6 +10,7 @@ session id can't break out of the eval):
     BIN=<peer cli name>
     STREAM_FORMAT=<format passed to render.py>
     SID_KEY=<json key carrying the resumable session id>
+    ARTIFACTS_DIR=<optional dir template where the peer drops files, {sid} unexpanded>
     ARGS=( ...argv for the chosen mode, with {prompt}/{sid}/{effort}/{model}/{cwd} substituted... )
 
 Keeping argv construction here (rather than in bash) lets each peer express its own
@@ -118,6 +119,9 @@ def main():
         f"BIN={shlex.quote(str(adapter.get('bin', '')))}",
         f"STREAM_FORMAT={shlex.quote(str(adapter.get('stream_format', 'raw')))}",
         f"SID_KEY={shlex.quote(str(adapter.get('sid_key', '')))}",
+        # A template, {sid} left unexpanded: on a new run the sid doesn't exist yet — the
+        # dispatcher reads it back from the stream afterwards and resolves the path.
+        f"ARTIFACTS_DIR={shlex.quote(str(adapter.get('artifacts_dir', '')))}",
         f"PEER_EFFORT={shlex.quote(peer_effort)}",   # the level actually applied (after mapping)
         f"PEER_MODEL={shlex.quote(peer_model)}",     # the model actually applied ('' = CLI default)
         "ARGS=(" + " ".join(shlex.quote(a) for a in args) + ")",
