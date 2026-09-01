@@ -114,7 +114,6 @@ Env overrides:
                               does NOT scope resets — narrowing a reset takes the explicit flag
   AGENT_BRIDGE_STATE_DIR=DIR  where sessions + logs live (default: ~/.agent-bridge)
   AGENT_BRIDGE_MAX_DEPTH=N    max A→B→A delegation depth before refusing (default: 5)
-  AGENT_BRIDGE_TRIM=N         chars of each tool call/result shown live (default: 220; 0 = full)
 EOF
 }
 
@@ -303,9 +302,9 @@ if [ "${2:-}" = "reset" ]; then
 fi
 
 # The task text. An argv is convenient but goes through the caller's shell first, so a
-# prompt containing $, backticks or quotes arrives mangled (a literal '$12B' expands to
-# nothing) — --task-file takes the bytes as they are. '-' reads stdin, which the peer
-# doesn't need (it's run with </dev/null and the task in argv).
+# prompt containing $, backticks or quotes arrives mangled (a literal '$12B' becomes
+# '2B') — --task-file takes the bytes as they are. '-' reads stdin, which is free here:
+# the peer itself runs with </dev/null.
 PROMPT="${2:-}"
 if [ -n "$TASK_FILE" ]; then
   if [ -n "$PROMPT" ]; then
@@ -505,7 +504,7 @@ fi
 # --- files the peer dropped outside the repo -------------------------------------------
 # Some peers write their output into a private per-session directory rather than the cwd
 # (agy's image generation lands in its brain dir), and say nothing about it in the stream —
-# the files are simply invisible to the caller unless it thought to ask for a copy. When the
+# the files are invisible to the caller unless it thought to ask for a copy. When the
 # adapter declares where that is, list what this run put there. Reporting only: moving a
 # peer's files around is the caller's call, not the bridge's.
 EFFECTIVE_SID="${NEWSID:-$SID}"
@@ -518,7 +517,9 @@ if [ -n "${ARTIFACTS_DIR:-}" ] && [ -n "$EFFECTIVE_SID" ]; then
       N="$(printf '%s\n' "$NEW_FILES" | wc -l | tr -d ' ')"
       echo ""
       echo "── $TARGET artifacts · $N file(s) written outside the repo ──"
-      printf '%s\n' "$NEW_FILES" | head -n 20 | sed 's/^/  /'
+      # sed, not head: head exits at line 20 and a big list then kills printf with
+      # SIGPIPE, which pipefail turns into exit 141 masking the peer's real status.
+      printf '%s\n' "$NEW_FILES" | sed -n '1,20s/^/  /p'
       if [ "$N" -gt 20 ]; then echo "  … and $((N - 20)) more in $ART"; fi
     fi
   fi
