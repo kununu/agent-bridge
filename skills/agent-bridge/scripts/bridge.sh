@@ -90,7 +90,8 @@ Usage:
 
 Task text (--task-file): read the task from a file instead of an argv. Use it whenever the
 task contains $, backticks or quotes — an argv goes through your shell first, so a literal
-'$12B' in a prompt silently becomes '' unless you escape it. '-' reads stdin.
+'$12B' in a prompt silently becomes '2B' unless you escape it. '-' reads stdin. It solves
+mangling, not size: the task still travels as argv to the peer, capped at ~120KB.
 
 Effort levels (for --effort): low | medium | high | xhigh | max  (default: high).
 Each peer maps these onto its own scale; the run header shows the level actually applied.
@@ -326,6 +327,13 @@ if [ -n "$TASK_FILE" ]; then
 fi
 if [ -z "$PROMPT" ]; then
   echo "usage: bash bridge.sh $TARGET \"task for $TARGET\"   (or: --task-file <path>)" >&2
+  exit 1
+fi
+# --task-file solves mangling, not size: the task still travels as a single argv (to
+# adapter.py, meta.py, and the peer CLI), and ARG_MAX bounds that (~128KB/arg on Linux).
+# Refuse here with the real cause rather than let the peer's exec die with a bare E2BIG.
+if [ "$(printf %s "$PROMPT" | wc -c | tr -d ' ')" -gt 120000 ]; then
+  echo "agent-bridge: task is over 120KB — it travels as one argv to the peer CLI, which caps out near 128KB. Trim the brief, or have the peer read the file itself." >&2
   exit 1
 fi
 

@@ -53,8 +53,9 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> "your task for
 
 **Long tasks, or any task containing `$`, backticks or quotes: write it to a file and pass
 `--task-file` instead of an argv.** The argv goes through your shell first, so a literal
-`$12B` in a prompt silently arrives empty and the peer works from a corrupted brief. `-`
-reads stdin.
+`$12B` in a prompt silently arrives as `2B` and the peer works from a corrupted brief. `-`
+reads stdin. It solves mangling, not size — past ~120KB the bridge refuses (the task still
+travels as argv to the peer); tell the peer to read the file itself instead.
 
 ```
 bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --task-file brief.md
