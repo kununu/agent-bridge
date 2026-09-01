@@ -39,7 +39,8 @@ the main reasons to reach for agy.
   still be wrong. Check the objective constraints yourself (exact text, no stray lettering,
   subject in frame); likeness and taste are the user's call — show them the images, don't
   relay agy's summary.
-- **Carry the user's ask into the brief verbatim — don't soften or paraphrase it.**
-  Hedged phrasing gets hedged output.
+- **You'll usually author the prompts from the user's idea — but anything the user named
+  (a subject, exact text, a style) is a constraint: keep it verbatim, don't soften it.**
+  Hedging "X" into "resembling X" renders something else.
 - **Be explicit about text in the image:** name the exact strings allowed, or say that no
   text may appear at all — unrequested lettering is the most common defect.
