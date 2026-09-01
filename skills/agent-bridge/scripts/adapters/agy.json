@@ -2,6 +2,7 @@
   "bin": "agy",
   "stream_format": "agy-stream-json",
   "sid_key": "conversation_id",
+  "artifacts_dir": "~/.gemini/antigravity-cli/brain/{sid}",
   "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high" },
   "model_map": { "top": "gemini-3.6-flash", "gemini": "gemini-3.6-flash", "flash": "gemini-3.6-flash" },
   "model_args": ["--model", "{model}"],

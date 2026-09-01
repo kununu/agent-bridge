@@ -12,12 +12,28 @@ printed verbatim), and the dispatcher always keeps the unmodified stream in the 
 logs/ as the source of truth. Every format ends with a `── <peer> done ──` marker followed
 by the peer's final answer, so the calling agent can reliably find where the answer begins.
 """
+import os
 import sys
 import json
 import time
 
 _TTY = sys.stdout.isatty()
 _BEAT_EVERY = 5.0   # min seconds between thinking heartbeats when piped (non-TTY)
+
+
+def _trim_width():
+    """Chars of a tool call/result to show live. The raw stream is always kept in full in
+    the thread's logs/, but the calling agent reads THIS view — and when the tool argument
+    is the work product (an image prompt, a long query), 220 chars is enough to identify
+    the call and not enough to check it. AGENT_BRIDGE_TRIM=0 shows everything."""
+    try:
+        n = int(os.environ.get("AGENT_BRIDGE_TRIM", "220"))
+    except ValueError:
+        return 220
+    return n if n >= 0 else 220
+
+
+_TRIM = _trim_width()
 
 
 def show(s, end="\n"):
@@ -29,9 +45,12 @@ def fmt_tok(n):
     return f"~{n / 1000:.1f}k tokens" if n >= 1000 else f"~{n} tokens"
 
 
-def trim(s, n=220):
+def trim(s, n=None):
+    n = _TRIM if n is None else n
     s = " ".join(str(s).split())
-    return s if len(s) <= n else s[:n] + " ..."
+    if n == 0 or len(s) <= n:
+        return s
+    return s[:n] + " ..."
 
 
 # --------------------------------------------------------------------------- Claude
@@ -269,9 +288,21 @@ def render_agy():
                 if state == "ACTIVE":
                     flush_pending()
                     show(f"  · tool: {name} {trim(json.dumps(info.get('parameters', {}), ensure_ascii=False))}")
-                elif state == "ERROR":
+                elif state in ("DONE", "ERROR"):
+                    # The DONE event carries duration_seconds and (for most tools) an
+                    # output string. Without it a long run of slow tools — twelve image
+                    # generations at ~30s each — looks identical to a hung one: calls go
+                    # out, nothing ever comes back. Report the result, not just the call.
                     flush_pending()
-                    show(f"  · tool {name} failed")
+                    bits = []
+                    dur = su.get("duration_seconds")
+                    if isinstance(dur, (int, float)):
+                        bits.append(f"{dur:.1f}s")
+                    out = info.get("output")
+                    if out not in (None, ""):
+                        bits.append(trim(out, 160 if _TRIM else 0))
+                    tag = "failed" if state == "ERROR" else "done"
+                    show(f"    \u21b3 {name} {tag}{' · ' + ' · '.join(bits) if bits else ''}")
 
         elif ev == "result":
             r = e.get("result", {})

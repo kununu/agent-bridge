@@ -16,10 +16,30 @@
   persists it per thread (`main` unless you pass `--thread`), so same-chat, same-thread
   follow-ups continue automatically. An id agy doesn't know is silently ignored (fresh
   conversation) — trust the bridge's stored one.
-- **Images & browser:** it genuinely generates images (a native `generate_image` tool —
-  AI imagery, not code-drawn) and can drive a browser (open pages, click, screenshot).
-  Ask for generated files to be saved into the workspace root, or they land in its
-  internal brain dir.
-- **Good for:** a second opinion from a different model family, great for image generation, and
-  cross-checking another agent's output with fresh eyes. Bad at solving complex
+- **Browser:** it can drive one (open pages, click, screenshot).
+- **Good for:** a second opinion from a different model family, image generation (see below),
+  and cross-checking another agent's output with fresh eyes. Bad at solving complex
   problems or coding.
+
+## Image generation
+
+Its `generate_image` tool makes real AI imagery, not code-drawn graphics, and this is one of
+the main reasons to reach for agy. Roughly 25-40 s per image, so a batch of twelve is a
+~12 minute run — brief it once for the whole batch rather than one image per delegation.
+
+- **Files land in agy's brain dir, not your repo.** They go to
+  `~/.gemini/antigravity-cli/brain/<conversation-id>/<ImageName>_<epoch>.png`. The bridge
+  lists them under `── agy artifacts ──` when the run ends, so nothing is lost, but if you
+  want them in the project you must **say so in the brief**: name the target directory and
+  the exact filenames, and tell it to copy them there and `ls` to confirm. Any path in the
+  repo works, not just the root.
+- **Pass image prompts with `--task-file`, not as an argv.** Prompts are long and routinely
+  contain `$` (`$12B`), quotes and parentheses; through a shell those are eaten silently.
+- **Verify the images yourself; its own report is not evidence.** It will state that a set
+  met every constraint when it did not (one run: two of three renders were the wrong person,
+  reported as all three correct). Look at the files. It does usefully self-correct some
+  renders mid-run, which is why the brain dir can hold more files than you asked for.
+- **Say plainly what you want in frame.** Hedged phrasing gets hedged output: "a person
+  resembling <name>" yields a generic stranger, where naming the subject directly renders
+  the subject. Same for text in an image — state the exact strings allowed and that nothing
+  else may appear, since extra lettering is the most common defect.
