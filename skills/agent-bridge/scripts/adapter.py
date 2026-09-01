@@ -119,9 +119,8 @@ def main():
         f"BIN={shlex.quote(str(adapter.get('bin', '')))}",
         f"STREAM_FORMAT={shlex.quote(str(adapter.get('stream_format', 'raw')))}",
         f"SID_KEY={shlex.quote(str(adapter.get('sid_key', '')))}",
-        # Emitted as a TEMPLATE, {sid} deliberately unexpanded: on a new run the peer's
-        # session id doesn't exist yet at argv-build time, so only the dispatcher — which
-        # reads the id back out of the stream afterwards — can resolve this path.
+        # A template, {sid} left unexpanded: on a new run the sid doesn't exist yet — the
+        # dispatcher reads it back from the stream afterwards and resolves the path.
         f"ARTIFACTS_DIR={shlex.quote(str(adapter.get('artifacts_dir', '')))}",
         f"PEER_EFFORT={shlex.quote(peer_effort)}",   # the level actually applied (after mapping)
         f"PEER_MODEL={shlex.quote(peer_model)}",     # the model actually applied ('' = CLI default)

@@ -29,10 +29,8 @@ def fmt_tok(n):
     return f"~{n / 1000:.1f}k tokens" if n >= 1000 else f"~{n} tokens"
 
 
-# 700 chars: fits every real tool call whole — image-gen prompts, the longest observed,
-# run ~560 — while still bounding huge args like file-write payloads. When the argument
-# IS the work product, the caller must be able to check it live, not just identify it;
-# the full stream is always in the thread's logs/.
+# 700 fits every real tool call whole (image-gen prompts, the longest observed, run ~560)
+# while still bounding huge args like file-write payloads; the full stream is in logs/.
 def trim(s, n=700):
     s = " ".join(str(s).split())
     return s if len(s) <= n else s[:n] + " ..."
@@ -274,9 +272,8 @@ def render_agy():
                     flush_pending()
                     show(f"  · tool: {name} {trim(json.dumps(info.get('parameters', {}), ensure_ascii=False))}")
                 elif state in ("DONE", "ERROR"):
-                    # Without a completion line a run of slow tools — twelve image
-                    # generations at ~30s each — looks identical to a hung one: calls
-                    # go out, nothing ever comes back.
+                    # Without completion lines a run of slow tools (image gens take ~30s
+                    # each) looks identical to a hung one: calls go out, nothing comes back.
                     flush_pending()
                     bits = []
                     dur = su.get("duration_seconds")

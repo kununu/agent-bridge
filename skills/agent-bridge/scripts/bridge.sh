@@ -301,10 +301,6 @@ if [ "${2:-}" = "reset" ]; then
   exit 0
 fi
 
-# The task text. An argv is convenient but goes through the caller's shell first, so a
-# prompt containing $, backticks or quotes arrives mangled (a literal '$12B' becomes
-# '2B') — --task-file takes the bytes as they are. '-' reads stdin, which is free here:
-# the peer itself runs with </dev/null.
 PROMPT="${2:-}"
 if [ -n "$TASK_FILE" ]; then
   if [ -n "$PROMPT" ]; then
@@ -312,7 +308,7 @@ if [ -n "$TASK_FILE" ]; then
     exit 1
   fi
   if [ "$TASK_FILE" = "-" ]; then
-    PROMPT="$(cat)"
+    PROMPT="$(cat)"   # stdin is free to consume: the peer itself runs with </dev/null
   elif [ -f "$TASK_FILE" ]; then
     PROMPT="$(cat "$TASK_FILE")"
   else
@@ -502,11 +498,9 @@ if [ -n "$MODEL_EXPLICIT" ] && [ -n "${PEER_MODEL:-}" ] && [ "$PEER_MODEL" != "$
 fi
 
 # --- files the peer dropped outside the repo -------------------------------------------
-# Some peers write their output into a private per-session directory rather than the cwd
-# (agy's image generation lands in its brain dir), and say nothing about it in the stream —
-# the files are invisible to the caller unless it thought to ask for a copy. When the
-# adapter declares where that is, list what this run put there. Reporting only: moving a
-# peer's files around is the caller's call, not the bridge's.
+# Some peers write output into a private per-session directory and say nothing about it in
+# the stream (agy's generated images land in its brain dir). When the adapter declares where
+# that is, list what this run put there. Reporting only: moving files is the caller's call.
 EFFECTIVE_SID="${NEWSID:-$SID}"
 if [ -n "${ARTIFACTS_DIR:-}" ] && [ -n "$EFFECTIVE_SID" ]; then
   ART="${ARTIFACTS_DIR//\{sid\}/$EFFECTIVE_SID}"
