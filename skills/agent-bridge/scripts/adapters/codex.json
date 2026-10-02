@@ -2,8 +2,8 @@
   "bin": "codex",
   "stream_format": "codex-jsonl",
   "sid_key": "thread_id",
-  "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh" },
-  "model_map": { "top": "gpt-5.6-sol", "sol": "gpt-5.6-sol", "terra": "gpt-5.6-terra", "luna": "gpt-5.6-luna" },
+  "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max" },
+  "model_map": { "top": "gpt-6-astra", "astra": "gpt-6-astra", "sol": "gpt-6.1-sol", "luna": "gpt-6-luna" },
   "model_args": ["-m", "{model}"],
   "cmd_new": [
     "exec",

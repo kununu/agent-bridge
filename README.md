@@ -1,6 +1,6 @@
 # agent-bridge
 
-Have **any AI coding agent drive another as a peer** — to implement, review, or red-team — without copy-pasting between two chat windows.
+Have **any AI coding agent drive another as a peer** — to implement, review, red-team, or think through a plan — without copy-pasting between two chat windows.
 
 Talk to whichever agent you prefer (Claude Code, Codex, …). When you say *"ask Codex to implement this"* or *"have Claude review this diff"*, the bridge briefs the peer, runs it on your own subscription via the peer's **real CLI** (so it keeps its full toolset), streams the work back live, then verifies it and reports. You watch and steer between rounds — you're never the messenger.
 
