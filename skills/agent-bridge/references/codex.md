@@ -7,11 +7,12 @@
   rather than a thinking-token counter. Gaps between events are it reasoning — that's
   normal, not a hang.
 - **Effort:** set via `-c model_reasoning_effort=…`; the bridge maps canonical levels onto
-  Codex's (`low`/`medium`/`high`/`xhigh`), with `max`→`xhigh` — its top reasoning tier.
-- **Model:** set via `-m`; `--model top` → `gpt-5.6-sol`, and the short names `sol` /
-  `terra` / `luna` resolve to their full GPT-5.6 IDs. The cheapest that's still solid at
-  coding is `luna`. A mid-thread model switch makes Codex print an `· error:`-labeled
-  warning in the stream — informational, the run continues.
+  Codex's (`low`/`medium`/`high`/`xhigh`/`max`) one-to-one. Codex's extra `ultra` tier
+  (auto task delegation) isn't exposed.
+- **Model:** set via `-m`; `--model top` → `gpt-6-astra` (frontier, strongest). Short names:
+  `astra` → `gpt-6-astra`, `sol` → `gpt-6.1-sol` (the coding workhorse), `luna` →
+  `gpt-6-luna` (the cheapest that's still solid at coding). A mid-thread model switch makes
+  Codex print an `· error:`-labeled warning in the stream — informational, the run continues.
 - **Resume:** sessions resume by `thread_id`; the bridge persists it for you per thread
   (`main` unless you pass `--thread`), so same-chat, same-thread follow-ups continue it.
 - **Reasoning text** only appears when reasoning summaries are enabled; by default you'll

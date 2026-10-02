@@ -146,9 +146,9 @@ while [ $# -gt 0 ]; do
     # remain a parse-level escape hatch — the bridge passes a dash-leading value through,
     # though the peer CLI's own parser may still reject it.
     --effort)   shift; EFFORT="${1:-}"
-                case "$EFFORT" in ''|-*) echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1;; esac ;;
+                case "$EFFORT" in ''|-*) echo "agent-bridge: --effort needs a level (low|medium|high|xhigh|max)" >&2; exit 1;; esac ;;
     --effort=*) EFFORT="${1#--effort=}"
-                [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|max)" >&2; exit 1; } ;;
+                [ -z "$EFFORT" ] && { echo "agent-bridge: --effort needs a level (low|medium|high|xhigh|max)" >&2; exit 1; } ;;
     --model)    shift; MODEL="${1:-}"
                 case "$MODEL" in ''|-*) echo "agent-bridge: --model needs 'top' or a model name" >&2; exit 1;; esac ;;
     --model=*)  MODEL="${1#--model=}"
@@ -376,7 +376,7 @@ if [ -f "$SESSION_FILE" ]; then
   MODE="resume"; SID="$(cat "$SESSION_FILE")"
 fi
 
-# An explicit --model sticks to the thread (stored resolved — 'gpt-5.6-sol', not 'top' —
+# An explicit --model sticks to the thread (stored resolved — 'gpt-6-astra', not 'top' —
 # after a successful run, below): model-less follow-ups reuse it instead of silently
 # falling back to the CLI default mid-session. A different explicit model switches the
 # thread — allowed, shown in the header, re-stored on success.
@@ -416,7 +416,7 @@ if [ -z "$BIN_PATH" ]; then
   exit 127
 fi
 
-# Show the requested level; add the peer's mapped term when it differs (e.g. Codex caps max→high).
+# Show the requested level; add the peer's mapped term when it differs (e.g. agy caps max→high).
 # Braces before the arrow are load-bearing: without them bash 3.2 under a Latin-1-ish locale
 # lexes the first byte of '→' (0xE2, a letter there) into the variable name and expands the
 # whole thing to empty.
@@ -424,7 +424,7 @@ EFFORT_DISP="$EFFORT"
 [ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="${EFFORT}→${PEER_EFFORT}"
 # Model: keyed on PEER_MODEL — the model the peer actually receives — so a requested-but-
 # ignored model (adapter without model support) never shows up as applied. Plain when
-# inherited, 'top→gpt-5.6-sol' when the mapping changed the request, spelled out on a switch.
+# inherited, 'top→gpt-6-astra' when the mapping changed the request, spelled out on a switch.
 MODEL_DISP=""
 if [ -n "${PEER_MODEL:-}" ]; then
   MODEL_DISP=" · model ${PEER_MODEL}"

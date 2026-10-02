@@ -14,7 +14,7 @@ The invocation names the peer: `/bridge-review gemini`, `/bridge-review codex`,
 `/bridge-review claude`. With no peer named, never make assumptions, ask the human which one to use.
 
 If this skill has a `references/<peer>.md`, read it. It records that peer's quirks. No file
-means no quirks.
+means no quirks. `gemini` is bridge peer `agy`, with notes in `references/gemini.md`.
 
 ## 2. Send the review
 
@@ -23,7 +23,7 @@ Call the Skill tool with "agent-bridge" and delegate to the peer.
 The brief carries the context the peer cannot see:
 
 - Goal. What this change is for, so it can judge whether the code is the simplest way there.
-- Gotchas. The things you discovered during implemenation that the peer should be aware of. If there are none, just skip this section.
+- Gotchas. The things you discovered during implementation that the peer should be aware of. If there are none, just skip this section.
 - Scope. Which files or which diff to review, by path or commit range.
 - Standards, both layers: the coding-standards skill, and this repo's own conventions in
   AGENTS.md, CLAUDE.md, local project skills and any standards docs. Where the two disagree, the repo wins.

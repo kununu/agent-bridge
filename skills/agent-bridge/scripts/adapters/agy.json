@@ -4,14 +4,13 @@
   "sid_key": "conversation_id",
   "artifacts_dir": "~/.gemini/antigravity-cli/brain/{sid}",
   "effort_map": { "low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high" },
-  "model_map": { "top": "gemini-3.7-flash", "gemini": "gemini-3.7-flash", "flash": "gemini-3.7-flash" },
+  "model_map": { "top": "gemini-3.8-flash", "gemini": "gemini-3.8-flash", "flash": "gemini-3.8-flash" },
   "model_args": ["--model", "{model}"],
   "cmd_new": [
     "--print", "{prompt}",
     "--output-format", "stream-json",
     "--add-dir", "{cwd}",
     "--dangerously-skip-permissions",
-    "--print-timeout", "24h",
     "--effort", "{effort}",
     "{model_args}"
   ],
@@ -21,7 +20,6 @@
     "--output-format", "stream-json",
     "--add-dir", "{cwd}",
     "--dangerously-skip-permissions",
-    "--print-timeout", "24h",
     "--effort", "{effort}",
     "{model_args}"
   ]

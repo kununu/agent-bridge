@@ -16,12 +16,12 @@ compatibility: >-
 # agent-bridge — delegate to a peer coding agent
 
 You are the lead engineer. Through the bridge you can hand self-contained work to a **peer
-coding agent** — another full agent (e.g. Claude Code or Codex) running its own harness in
-auto mode, so it can take real, meaty work and run it to completion: building, testing, and
-verifying its own output before reporting back.
+coding agent** (e.g. Claude Code, Codex) running its own harness in auto mode, so it can
+take sizable work and run it to completion: building, testing, and verifying its own output
+before reporting back.
 
-The bridge **auto-detects which agent you are** and which peers you can call — you never
-delegate to yourself, and the same skill works whichever agent is driving.
+The bridge **auto-detects which agent you are** and which peers you can call. You never
+delegate to yourself; for that, use your own harness's subagents.
 
 ## Who can I call?
 
@@ -117,7 +117,7 @@ a model's short name (e.g. `sonnet`, `luna`); each peer's lineup lives in
 `references/<peer>.md`, and the adapter translates the name into the peer CLI's own model
 argument. Anything it doesn't recognize is passed to the peer CLI verbatim, so exact or
 brand-new model IDs work too. **Normalize the user's wording yourself**: *"Claude's best model"* → `--model top`;
-*"codex tera"* (typo) → `--model terra`; *"codex's cheapest"* → the cheapest model named in
+*"codex astr"* (typo) → `--model astra`; *"codex's cheapest"* → the cheapest model named in
 that peer's reference notes.
 
 **Model and effort are independent knobs**: `--model` picks the model, `--effort` how hard
@@ -162,13 +162,16 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --thread worke
   bigger the chunk it can take.
 - **State the scope clearly** so it neither overreaches nor stops short.
 
-## Three ways to use a peer — pick what fits
+## Four ways to use a peer — pick what fits
 
 1. **Implementer** — give it the work; let it build, test, and report.
 2. **Independent reviewer** — fresh eyes on something you or it wrote:
    "Review the changes in X for correctness and edge cases; be specific."
 3. **Adversarial red-team** — have it try to break a design or find the worst failure:
    "Find inputs where this parser returns the wrong answer."
+4. **Thinking partner** — ask for opinions on an idea, design, approach, or plan; it can
+   brainstorm, critique, suggest alternatives, or validate your plan:
+   "Here's my plan for the migration. What would you do differently?"
 
 For reviews, ask pointed questions and judge the critique on its merits — push back when you
 disagree, take it when it's right. Two strong models disagreeing is the point.
