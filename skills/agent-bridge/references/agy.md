@@ -10,8 +10,7 @@
 - **Model:** `--model top` (and the short names `argon` / `gemini`) → `gemini-4-argon`,
   the current flagship; `flash` → `gemini-3.8-flash`, the cheaper option. Effort picks the
   model's high/medium/low variant. Older lineups (3.7/3.6 flash, 3.1 pro) are outdated —
-  don't offer them unprompted, though exact IDs the user insists on pass through verbatim.
-  With no model the user's own agy default applies.
+  don't offer them unprompted.
 - **Resume:** conversations resume by conversation id (`--conversation`); the bridge
   persists it per thread (`main` unless you pass `--thread`), so same-chat, same-thread
   follow-ups continue automatically. An id agy doesn't know is silently ignored (fresh
