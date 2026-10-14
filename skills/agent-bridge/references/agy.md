@@ -7,18 +7,17 @@
   events are it thinking — normal, not a hang.
 - **Effort:** `--effort low|medium|high`; the bridge maps `xhigh`/`max` down to `high`,
   agy's top tier (the run header shows the mapping).
-- **Model:** `--model top` (and the short names `gemini` / `flash`) → `gemini-3.8-flash`,
-  the current lineup's strongest; effort picks its high/medium/low variant. Older lineups
-  (3.7/3.6 flash, 3.1 pro) are outdated — don't offer them unprompted, though exact IDs the
-  user insists on pass through verbatim. With no model the user's own agy default applies.
+- **Model:** `--model top` (and the short names `argon` / `gemini`) → `gemini-4-argon`,
+  the current flagship; `flash` → `gemini-3.8-flash`, the cheaper option. Effort picks the
+  model's high/medium/low variant. Older lineups (3.7/3.6 flash, 3.1 pro) are outdated —
+  don't offer them unprompted.
 - **Resume:** conversations resume by conversation id (`--conversation`); the bridge
   persists it per thread (`main` unless you pass `--thread`), so same-chat, same-thread
   follow-ups continue automatically. An id agy doesn't know is silently ignored (fresh
   conversation) — trust the bridge's stored one.
 - **Browser:** it can drive one (open pages, click, screenshot).
-- **Good for:** a second opinion from a different model family, image generation (see below),
-  and cross-checking another agent's output with fresh eyes. Bad at solving complex
-  problems or coding.
+- **Good for:** coding and implementation, a second opinion from a different model family,
+  image generation (see below), and cross-checking another agent's output with fresh eyes.
 
 ## Image generation
 

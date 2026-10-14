@@ -43,9 +43,7 @@ skills/agent-bridge/
 
 skills/bridge-review/    # user-invoked: /bridge-review <peer> — send the current changes to a peer, verify what comes back
 ├── SKILL.md
-├── agents/openai.yaml   # Codex picker metadata (user-invoked)
-└── references/          # per-peer trust notes, loaded on demand
-    └── gemini.md
+└── agents/openai.yaml   # Codex picker metadata (user-invoked)
 ```
 
 **The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format, how it names its reasoning levels (`effort_map`) and models (`model_map`), where it drops files outside the repo (`artifacts_dir`, listed after each run) — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file** — plus a small renderer in `render.py` if the peer speaks a stream format the bridge hasn't seen yet — and that's what keeps an N×N problem linear.
