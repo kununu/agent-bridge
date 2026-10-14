@@ -13,8 +13,7 @@ A peer agent reviews the work, you decide what is real.
 The invocation names the peer: `/bridge-review gemini`, `/bridge-review codex`,
 `/bridge-review claude`. With no peer named, never make assumptions, ask the human which one to use.
 
-If this skill has a `references/<peer>.md`, read it. It records that peer's quirks. No file
-means no quirks. `gemini` is bridge peer `agy`, with notes in `references/gemini.md`.
+`gemini` is bridge peer `agy`.
 
 ## 2. Send the review
 
