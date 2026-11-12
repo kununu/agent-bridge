@@ -145,6 +145,10 @@ bash "$HOME/.agents/skills/agent-bridge/scripts/bridge.sh" <peer> --thread worke
 
 - **When you spawn helper subagents that delegate, put a unique `--thread <label>` in the
   exact command you hand each helper** — the helper can't tell on its own that it's one of many.
+- **Several models of one peer** (*"ask codex sol and astra to review X"*) need one thread
+  per model, even when run one after the other — e.g. `--thread review-sol --model sol`,
+  `--thread review-astra --model astra`. On a shared thread the second model would resume
+  the first's session and replace its model.
 - Labels are yours to choose — `worker-1`, `review`, `tests` (must start with a letter or digit).
 - Each thread is its own persistent peer session — follow-ups on the same label continue it.
 - A helper that needs a clean slate should reset **only its own lane** —
