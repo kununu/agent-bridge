@@ -9,8 +9,8 @@
 - **Effort:** set via `-c model_reasoning_effort=…`; the bridge maps canonical levels onto
   Codex's (`low`/`medium`/`high`/`xhigh`/`max`) one-to-one. Codex's extra `ultra` tier
   (auto task delegation) isn't exposed.
-- **Model:** set via `-m`; `--model top` → `gpt-6-astra` (frontier, strongest). Short names:
-  `astra` → `gpt-6-astra`, `sol` → `gpt-6.1-sol` (the coding workhorse), `luna` →
+- **Model:** set via `-m`; `--model top` → `gpt-6.2-astra` (frontier, strongest). Short names:
+  `astra` → `gpt-6.2-astra`, `sol` → `gpt-6.2-sol` (the coding workhorse), `luna` →
   `gpt-6-luna` (the cheapest that's still solid at coding). A mid-thread model switch makes
   Codex print an `· error:`-labeled warning in the stream — informational, the run continues.
 - **Resume:** sessions resume by `thread_id`; the bridge persists it for you per thread

@@ -376,7 +376,7 @@ if [ -f "$SESSION_FILE" ]; then
   MODE="resume"; SID="$(cat "$SESSION_FILE")"
 fi
 
-# An explicit --model sticks to the thread (stored resolved — 'gpt-6-astra', not 'top' —
+# An explicit --model sticks to the thread (stored resolved — 'gpt-6.2-astra', not 'top' —
 # after a successful run, below): model-less follow-ups reuse it instead of silently
 # falling back to the CLI default mid-session. A different explicit model switches the
 # thread — allowed, shown in the header, re-stored on success.
@@ -424,7 +424,7 @@ EFFORT_DISP="$EFFORT"
 [ -n "${PEER_EFFORT:-}" ] && [ "$PEER_EFFORT" != "$EFFORT" ] && EFFORT_DISP="${EFFORT}→${PEER_EFFORT}"
 # Model: keyed on PEER_MODEL — the model the peer actually receives — so a requested-but-
 # ignored model (adapter without model support) never shows up as applied. Plain when
-# inherited, 'top→gpt-6-astra' when the mapping changed the request, spelled out on a switch.
+# inherited, 'top→gpt-6.2-astra' when the mapping changed the request, spelled out on a switch.
 MODEL_DISP=""
 if [ -n "${PEER_MODEL:-}" ]; then
   MODEL_DISP=" · model ${PEER_MODEL}"
