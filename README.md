@@ -19,7 +19,7 @@ The bridge is **one [agent-skill](https://agentskills.io)** installed into every
 With the [`skills`](https://skills.sh) CLI, install/update the skill into each agent you want bridged:
 
 ```
-npx skills add kununu/agent-bridge -g -a claude-code codex -s '*' # -g installs into all projects; -s '*' takes both skills
+npx skills add kununu/agent-bridge -g -a claude-code codex -s '*' # -g installs into all projects; -s '*' takes every skill
 ```
 
 ## Structure
@@ -44,6 +44,19 @@ skills/agent-bridge/
 skills/bridge-review/    # user-invoked: /bridge-review <peer> — send the current changes to a peer, verify what comes back
 ├── SKILL.md
 └── agents/openai.yaml   # Codex picker metadata (user-invoked)
+
+skills/update-harnesses/ # user-invoked: /update-harnesses [peer…] — update the agent CLIs
+├── SKILL.md
+├── update-harnesses.sh  # the updater; also runs from a terminal
+└── agents/openai.yaml
+```
+
+## Updating the agent CLIs
+
+`update-harnesses.sh` runs `claude update`, `codex update` and `agy update` in turn, or only the CLIs you name. A CLI that isn't installed is skipped, and a failed update doesn't stop the rest. Use `/update-harnesses` in chat, or alias the installed script for the terminal:
+
+```
+alias update-harnesses='bash ~/.agents/skills/update-harnesses/update-harnesses.sh'
 ```
 
 **The idea: one generic dispatcher + tiny per-peer adapters.** `bridge.sh` detects which agent is calling and offers every adapter *except itself*. Everything peer-specific — the CLI command, how it resumes a session, its stream format, how it names its reasoning levels (`effort_map`) and models (`model_map`), where it drops files outside the repo (`artifacts_dir`, listed after each run) — lives in `adapters/<peer>.json`; `render.py` turns each peer's native stream into one readable view. So **adding an agent is one adapter file** — plus a small renderer in `render.py` if the peer speaks a stream format the bridge hasn't seen yet — and that's what keeps an N×N problem linear.

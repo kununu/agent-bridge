@@ -1,0 +1,5 @@
+interface:
+  display_name: "Update harnesses"
+  short_description: "Update the Claude Code, Codex and agy CLIs to their latest versions"
+policy:
+  allow_implicit_invocation: false
