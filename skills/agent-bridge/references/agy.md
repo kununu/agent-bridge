@@ -6,11 +6,12 @@
 - **Progress signal:** narration and `· tool:` action lines as it works. Gaps between
   events are it thinking — normal, not a hang.
 - **Effort:** `--effort low|medium|high`; the bridge maps `xhigh`/`max` down to `high`,
-  agy's top tier (the run header shows the mapping).
-- **Model:** `--model top` (and the short names `carbon` / `gemini`) → `gemini-4-carbon`,
-  the current flagship; `flash` → `gemini-3.8-flash`, the cheaper option. Effort picks the
-  model's high/medium/low variant. `argon` → `gemini-4-argon` resolves when the user names
-  it; don't offer it or the older lineups (3.7/3.6 flash, 3.1 pro) unprompted.
+  the top tier every agy model has (the run header shows the mapping).
+- **Model:** `--model top` (and the short names `neon` / `gemini`) → `gemini-4-neon`, the
+  strongest for agentic coding; `hydrogen` → `gemini-4-hydrogen`, fast and cheap. `carbon`
+  → `gemini-4-carbon` is Google's nominal flagship but weaker at agentic coding than Neon:
+  use it only when the user names it. Effort picks the model's low/medium/high variant.
+  Don't offer older models (argon, flash, 3.1 pro) unprompted.
 - **Resume:** conversations resume by conversation id (`--conversation`); the bridge
   persists it per thread (`main` unless you pass `--thread`), so same-chat, same-thread
   follow-ups continue automatically. An id agy doesn't know is silently ignored (fresh
